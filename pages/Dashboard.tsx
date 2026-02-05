@@ -409,7 +409,7 @@ export const Dashboard: React.FC<Props> = ({ user, onStartTrial }) => {
 
              <h2 className="text-xl font-bold text-white mb-2">AI Voice Interview</h2>
              <p className="text-slate-400 text-sm mb-4">
-               Real-time verbal assessment. 3 adaptive questions. 5 minutes.
+               Real-time verbal assessment. 20 adaptive questions. 30 minutes.
                <span className="block mt-1 text-xs text-slate-500 font-mono">*Camera & Mic Required</span>
              </p>
 

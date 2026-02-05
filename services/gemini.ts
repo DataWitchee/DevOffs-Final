@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { SkillDomain, SkillDNAScore, AntiCheatLog, ExamMCQ, ExamTheory, ExamPractical, ChallengeCheckpoint } from '../types';
 
@@ -52,10 +53,10 @@ export const analyzeEnvironmentSnapshot = async (
     const ai = getAiClient();
     const prompt = `
       Perform a security scan of this workspace. 
-      Evaluate:
-      1. lighting: Face visibility.
-      2. singlePerson: Human count == 1.
-      3. noDevices: No electronic devices detected.
+      Evaluate with high tolerance for budget hardware:
+      1. lighting: BE HIGHLY LENIENT. Mark as true if the face is broadly discernible. Do not penalize for low-quality sensors, grain, or low-light shadows typical of budget devices.
+      2. singlePerson: Human count should be exactly 1.
+      3. noDevices: No electronic devices (phones, tablets) detected in the immediate workspace.
       
       Output JSON only.
     `;
@@ -102,9 +103,14 @@ export const analyzeEnvironmentSnapshot = async (
 
 // --- SKILL TRIAL ---
 
-export const generateSkillTrial = async (domain: SkillDomain): Promise<{ questions: {id: number, text: string}[], constraints: string[] }> => {
+export const generateSkillTrial = async (domain: SkillDomain): Promise<{ questions: {id: number, text: string, category: 'Practical' | 'Concept'}[], constraints: string[] }> => {
     const ai = getAiClient();
-    const prompt = `Generate exactly 10 interview questions for ${domain}. Level: Senior.`;
+    const prompt = `Generate a highly competitive senior-level technical trial for ${domain}.
+    The trial must consist of exactly 10 questions:
+    - 5 Practical Questions: Focus on implementation details, edge cases, and real-world system design scenarios.
+    - 5 Concept Questions: Focus on deep theoretical understanding, internals, and architectural trade-offs.
+    The questions should be very difficult and aimed at distinguish between senior and staff level engineers.
+    Output JSON only.`;
     
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: FAST_MODEL,
@@ -120,9 +126,10 @@ export const generateSkillTrial = async (domain: SkillDomain): Promise<{ questio
                             type: Type.OBJECT,
                             properties: {
                                 id: { type: Type.INTEGER },
-                                text: { type: Type.STRING }
+                                text: { type: Type.STRING },
+                                category: { type: Type.STRING, enum: ['Practical', 'Concept'] }
                             },
-                            required: ["id", "text"]
+                            required: ["id", "text", "category"]
                         }
                     },
                     constraints: {
@@ -146,7 +153,7 @@ export const evaluatePerformance = async (
     antiCheat: AntiCheatLog
 ): Promise<{ score: SkillDNAScore; feedback: string }> => {
     const ai = getAiClient();
-    const prompt = `Evaluate performance in ${domain}. Solution: ${solutionSummary}`;
+    const prompt = `Evaluate performance in ${domain}. Solution: ${solutionSummary}. Time spent: ${timeSpent}s. Anti-cheat log: ${JSON.stringify(antiCheat)}.`;
 
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: FAST_MODEL,

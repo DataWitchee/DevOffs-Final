@@ -1,12 +1,20 @@
 
 import { db } from './auth';
-import { doc, setDoc, getDoc, onSnapshot, updateDoc, runTransaction, collection, addDoc, query, orderBy, limit } from 'firebase/firestore';
+import { doc, setDoc, getDoc, onSnapshot, updateDoc, runTransaction, collection, query, orderBy, limit, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { User, SkillDomain, ChallengeParticipant, ChallengeCheckpoint } from '../types';
 
-// EVENT SOURCING ARCHITECTURE
-// State is derived from an immutable log of events, not stored directly.
+/**
+ * PSN LIVE ARENA: EVENT-SOURCED ARCHITECTURE
+ * 
+ * To ensure a "join anywhere, any device" experience that is "totally live and smooth,"
+ * we use an Event-Sourced model on top of Firestore. 
+ * 
+ * 1. Authority: The list of Events in the document is the single source of truth.
+ * 2. Determinism: Any client can replay the event log to arrive at the exact same session state.
+ * 3. Atomic Updates: Transactions prevent race conditions during high-concurrency "join" or "finish" events.
+ */
 
-type EventType = 'SESSION_CREATED' | 'USER_JOINED' | 'USER_LEFT' | 'SCENARIO_SET' | 'SESSION_STARTED' | 'PROGRESS_UPDATED';
+type EventType = 'SESSION_CREATED' | 'USER_JOINED' | 'USER_LEFT' | 'SCENARIO_SET' | 'SESSION_STARTED' | 'PROGRESS_UPDATED' | 'HEARTBEAT';
 
 interface ChallengeEvent {
   type: EventType;
@@ -23,27 +31,39 @@ export interface ChallengeSession {
   taskDescription?: string;
   checkpoints?: ChallengeCheckpoint[];
   startTime?: number;
+  lastHeartbeat?: number;
+  maxParticipants: number;
 }
 
-// Reducer Function to reconstruct state from events
+const SESSION_EXPIRY_MS = 1000 * 60 * 120; // 2 Hours
+const MAX_PARTICIPANTS = 8;
+
+/**
+ * State Reducer: Reconstructs the ChallengeSession from an array of events.
+ * This ensures the state is consistent across all connected devices.
+ */
 const reduceSessionState = (events: ChallengeEvent[], initialId: string): ChallengeSession | null => {
     if (events.length === 0) return null;
 
-    // Base State
     let state: ChallengeSession = {
         id: initialId,
         hostId: '',
-        domain: SkillDomain.ALGORITHMS, // Default
+        domain: SkillDomain.ALGORITHMS,
         status: 'waiting',
         participants: [],
+        maxParticipants: MAX_PARTICIPANTS,
+        lastHeartbeat: Date.now()
     };
 
-    for (const event of events) {
+    // Sort events by timestamp to ensure deterministic replay
+    const sortedEvents = [...events].sort((a, b) => a.timestamp - b.timestamp);
+
+    for (const event of sortedEvents) {
         switch (event.type) {
             case 'SESSION_CREATED':
                 state.hostId = event.payload.host.id;
                 state.domain = event.payload.domain;
-                state.participants.push({
+                state.participants = [{
                     id: event.payload.host.id,
                     name: event.payload.host.name,
                     avatar: event.payload.host.avatar || 'H',
@@ -51,19 +71,22 @@ const reduceSessionState = (events: ChallengeEvent[], initialId: string): Challe
                     score: 0,
                     status: 'coding',
                     isBot: false
-                });
+                }];
                 break;
             case 'USER_JOINED':
-                if (!state.participants.find(p => p.id === event.payload.user.id)) {
-                    state.participants.push({
-                        id: event.payload.user.id,
-                        name: event.payload.user.name,
-                        avatar: event.payload.user.avatar || 'P',
-                        progress: 0,
-                        score: 0,
-                        status: 'coding',
-                        isBot: false
-                    });
+                if (state.participants.length < state.maxParticipants) {
+                    const existing = state.participants.find(p => p.id === event.payload.user.id);
+                    if (!existing) {
+                        state.participants.push({
+                            id: event.payload.user.id,
+                            name: event.payload.user.name,
+                            avatar: event.payload.user.avatar || 'P',
+                            progress: 0,
+                            score: 0,
+                            status: 'coding',
+                            isBot: false
+                        });
+                    }
                 }
                 break;
             case 'USER_LEFT':
@@ -84,44 +107,67 @@ const reduceSessionState = (events: ChallengeEvent[], initialId: string): Challe
                     : p
                 );
                 break;
+            case 'HEARTBEAT':
+                state.lastHeartbeat = event.timestamp;
+                break;
         }
     }
     return state;
 };
 
-// Generate a random 6-character code
 const generateSessionCode = () => {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
+  // Uses uppercase alphanumeric excluding confusing chars (0, O, I, 1)
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let result = '';
+  for (let i = 0; i < 6; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
 };
 
 const firebaseImplementation = {
   
+  /**
+   * Appends an event to the session using a Firestore Transaction.
+   * This handles concurrency: if two people join at the exact same millisecond,
+   * Firestore will retry until one succeeds, ensuring the participant list is correct.
+   */
   async appendEvent(code: string, type: EventType, payload: any): Promise<void> {
-     if (!db) throw new Error("DB offline");
-     // Store the event in a subcollection 'events' under the session doc
-     // This ensures we can replay them.
-     // Also update the snapshot doc for quick read access (Hybrid approach)
-     const sessionRef = doc(db, 'challenges', code);
+     if (!db) throw new Error("Database connection unavailable.");
      
-     // Note: In a true production system, we would write to an Event Store (Kafka/EventStoreDB)
-     // and have a projector update the read model. Here we mimic it by updating the read model immediately via transaction.
+     const sessionRef = doc(db, 'challenges', code);
      
      await runTransaction(db, async (transaction) => {
         const sessionDoc = await transaction.get(sessionRef);
         let currentEvents: ChallengeEvent[] = [];
         
         if (sessionDoc.exists()) {
-             currentEvents = sessionDoc.data().events || [];
+             const data = sessionDoc.data();
+             // Integrity Check: Do not append to expired sessions
+             if (data.lastHeartbeat && (Date.now() - data.lastHeartbeat > SESSION_EXPIRY_MS)) {
+                 throw new Error("Session has expired.");
+             }
+             currentEvents = data.events || [];
         } else if (type !== 'SESSION_CREATED') {
-            throw "Session does not exist";
+            throw new Error("Target session does not exist.");
         }
 
-        const newEvent: ChallengeEvent = { type, timestamp: Date.now(), payload };
+        const newEvent: ChallengeEvent = { 
+            type, 
+            timestamp: Date.now(), 
+            payload 
+        };
+        
         const updatedEvents = [...currentEvents, newEvent];
         const newState = reduceSessionState(updatedEvents, code);
 
         if (newState) {
-             transaction.set(sessionRef, { ...newState, events: updatedEvents });
+             // We persist the calculated state AND the event list for the smoothest possible UI updates
+             transaction.set(sessionRef, { 
+                 ...newState, 
+                 events: updatedEvents,
+                 lastUpdated: serverTimestamp() 
+             });
         }
      });
   },
@@ -132,7 +178,7 @@ const firebaseImplementation = {
       await this.appendEvent(code, 'SESSION_CREATED', { host, domain });
       return code;
     } catch (e) {
-      console.error("Firebase createSession failed:", e);
+      console.error("Session Creation Failure:", e);
       return "OFFLINE"; 
     }
   },
@@ -142,48 +188,67 @@ const firebaseImplementation = {
       await this.appendEvent(code, 'USER_JOINED', { user });
       return { success: true };
     } catch (e: any) {
-      return { success: false, message: "Connection failed" };
+      console.error("Session Join Failure:", e.message);
+      return { success: false, message: e.message || "Failed to join duel." };
     }
   },
 
   async leaveSession(code: string, userId: string): Promise<void> {
-     try { await this.appendEvent(code, 'USER_LEFT', { userId }); } catch(e){}
+     try { 
+         await this.appendEvent(code, 'USER_LEFT', { userId }); 
+     } catch(e) {
+         console.warn("Silent leave failure:", e);
+     }
   },
 
   async setSessionScenario(code: string, taskDescription: string, checkpoints: ChallengeCheckpoint[]): Promise<void> {
-     try { await this.appendEvent(code, 'SCENARIO_SET', { taskDescription, checkpoints }); } catch(e){}
+     try { 
+         await this.appendEvent(code, 'SCENARIO_SET', { taskDescription, checkpoints }); 
+     } catch(e) {}
   },
 
   async startSession(code: string): Promise<void> {
-     try { await this.appendEvent(code, 'SESSION_STARTED', { startTime: Date.now() }); } catch(e){}
+     try { 
+         await this.appendEvent(code, 'SESSION_STARTED', { startTime: Date.now() }); 
+     } catch(e) {}
   },
 
   async updateProgress(code: string, userId: string, progress: number, status: 'coding' | 'validating' | 'finished'): Promise<void> {
-     try { await this.appendEvent(code, 'PROGRESS_UPDATED', { userId, progress, status }); } catch(e){}
+     try { 
+         await this.appendEvent(code, 'PROGRESS_UPDATED', { userId, progress, status }); 
+         // Optional: Send periodic heartbeats here if session duration is very long
+     } catch(e) {}
   },
 
   subscribeToSession(code: string, callback: (data: ChallengeSession | null) => void): () => void {
     if (!db) return () => {};
     const sessionRef = doc(db, 'challenges', code);
-    return onSnapshot(sessionRef, (doc) => {
-      if (doc.exists()) {
-          // In a pure event sourcing system, we'd fetch events and reduce.
-          // Here we assume the transaction in appendEvent updated the snapshot.
-          const data = doc.data() as ChallengeSession;
+    
+    // onSnapshot provides real-time "Totally Live" updates with ultra-low latency
+    return onSnapshot(sessionRef, (snapshot) => {
+      if (snapshot.exists()) {
+          const data = snapshot.data() as ChallengeSession;
           callback(data);
       } else {
           callback(null);
       }
+    }, (error) => {
+        console.error("Live Stream Error:", error);
     });
   }
 };
 
-// MOCK IMPLEMENTATION (LOCAL STORAGE EVENT SOURCING)
+/**
+ * MOCK IMPLEMENTATION (LOCAL STORAGE)
+ * Fallback for guest users or offline testing
+ */
 const MOCK_STORAGE_KEY = 'psn_mock_event_store';
 
 const getMockEvents = (code: string): ChallengeEvent[] => {
-    const store = JSON.parse(localStorage.getItem(MOCK_STORAGE_KEY) || '{}');
-    return store[code] || [];
+    try {
+        const store = JSON.parse(localStorage.getItem(MOCK_STORAGE_KEY) || '{}');
+        return store[code] || [];
+    } catch(e) { return []; }
 };
 
 const saveMockEvent = (code: string, event: ChallengeEvent) => {
@@ -228,7 +293,7 @@ const mockImplementation = {
       callback(state);
     };
     check();
-    const interval = setInterval(check, 500); // Polling for mock
+    const interval = setInterval(check, 1000); 
     return () => clearInterval(interval);
   }
 };
@@ -238,6 +303,10 @@ const isOfflineUser = (user: User | string) => {
     return id.startsWith('offline_guest_');
 };
 
+/**
+ * Challenge Service Factory
+ * Dispatches to the most available "Solid" implementation.
+ */
 export const challengeService = {
     createSession: async (h: User, d: SkillDomain) => {
         if (isOfflineUser(h)) return mockImplementation.createSession(h, d);
