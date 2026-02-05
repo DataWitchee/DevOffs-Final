@@ -13,6 +13,7 @@ const getAiClient = () => {
   return aiClient;
 };
 
+// MODEL CONFIGURATION - HIGH DETERMINISM
 const GENERATION_MODEL = 'gemini-3-flash-preview';
 const REASONING_MODEL = 'gemini-3-pro-preview';
 
@@ -26,10 +27,8 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000): Pr
   }
 }
 
-// Helper to clean JSON strings from Markdown formatting often returned by LLMs
 const cleanJson = (text: string | undefined): string => {
   if (!text) return "{}";
-  // Remove markdown code blocks if present (e.g., ```json ... ```)
   let clean = text.replace(/```json/g, "").replace(/```/g, "");
   return clean.trim();
 };
@@ -43,22 +42,24 @@ const parseResponse = (text: string | undefined) => {
   }
 };
 
+// --- ROBOTIC PROCTORING SUITE ---
+
 export const analyzeEnvironmentSnapshot = async (
   imageBase64: string
 ): Promise<{ lighting: boolean; singlePerson: boolean; noDevices: boolean; feedback: string }> => {
   try {
     const ai = getAiClient();
+    // STRICT ROBOTIC PROCTOR PROMPT
     const prompt = `
-      Role: Strict Exam Proctor AI. 
-      Task: Analyze this webcam snapshot for interview integrity violations.
-
-      ANALYSIS RULES:
-      1. lighting: Must be TRUE (Pass) only if a human face is clearly visible, centered, and well-lit. If the image is too dark, blurry, or the face is obscured/missing/looking away, return FALSE.
-      2. singlePerson: Must be TRUE (Pass) only if exactly 1 person is visible. If 0 people or >1 person are detected, return FALSE.
-      3. noDevices: Must be TRUE (Pass) only if NO mobile phones, tablets, or written notes are visible. Headsets/headphones/earbuds are PERMITTED for audio participation.
-
-      STRICTNESS LEVEL: EXTREME. 
-      Any ambiguity or potential violation must result in a FAIL (FALSE).
+      Role: Autonomous Exam Proctor System.
+      Task: Analyze visual telemetry for security violations.
+      
+      VIOLATION CRITERIA (Zero Tolerance):
+      1. Lighting: FAIL if face is under-exposed, over-exposed (histogram clipping), or unevenly lit.
+      2. Identity: FAIL if face count != 1. FAIL if face is not fully frontal (+/- 15 degrees).
+      3. Objects: FAIL if phone, tablet, secondary screen, or unauthorized peripheral is detected.
+      
+      OUTPUT: Boolean states only. Ambiguity = FAIL.
     `;
 
     const base64Data = imageBase64.replace(/^data:image\/(png|jpeg|jpg);base64,/, "");
@@ -72,7 +73,7 @@ export const analyzeEnvironmentSnapshot = async (
         ]
       },
       config: {
-        temperature: 0,
+        temperature: 0, // MAX DETERMINISM
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -91,18 +92,24 @@ export const analyzeEnvironmentSnapshot = async (
 
   } catch (error) {
     console.error("Proctoring Check Failed:", error);
+    // FAIL SECURE: If AI fails, deny access.
     return {
       lighting: false,
       singlePerson: false,
       noDevices: false,
-      feedback: "Verification failed (Service Error). Please ensure good connection and retry."
+      feedback: "Telemetry analysis failed. Security check unsuccessful."
     };
   }
 };
 
+// --- SKILL TRIAL (EXACTLY 10 QUESTIONS) ---
+
 export const generateSkillTrial = async (domain: SkillDomain): Promise<{ questions: {id: number, text: string}[], constraints: string[] }> => {
     const ai = getAiClient();
-    const prompt = `Generate 10 technical interview questions for ${domain}. Return strictly JSON.`;
+    const prompt = `Generate exactly 10 high-difficulty, skill-specific interview questions for ${domain}. 
+    Difficulty: Senior/Principal Engineer. 
+    Format: Deterministic JSON.`;
+    
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: REASONING_MODEL,
         contents: prompt,
@@ -143,12 +150,15 @@ export const evaluatePerformance = async (
     antiCheat: AntiCheatLog
 ): Promise<{ score: SkillDNAScore; feedback: string }> => {
     const ai = getAiClient();
-    const prompt = `Evaluate the user's performance for ${domain}. 
+    const prompt = `Evaluate execution for ${domain}. 
+    Strictness: Production Grade. 
+    No partial credit for logic errors.
+    
     Task: ${taskSummary}
     Solution: ${solutionSummary}
     Reasoning: ${userReasoning}
     Time Spent: ${timeSpent}s
-    AntiCheat Log: ${JSON.stringify(antiCheat)}
+    Telemetry: ${JSON.stringify(antiCheat)}
     `;
 
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
@@ -180,9 +190,210 @@ export const evaluatePerformance = async (
     return parseResponse(response.text);
 };
 
+// --- COMPETITIVE EXAM GENERATION (STRICT COUNTS) ---
+
+export const generateExamMCQs = async (domain: SkillDomain): Promise<ExamMCQ[]> => {
+    const ai = getAiClient();
+    const prompt = `Generate exactly 20 Multiple Choice Questions (MCQs) for ${domain}.
+    Level: Expert.
+    Distractor Logic: High plausibility. No obvious wrong answers.`;
+    
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: REASONING_MODEL,
+        contents: prompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    questions: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                id: { type: Type.INTEGER },
+                                question: { type: Type.STRING },
+                                options: { 
+                                    type: Type.ARRAY,
+                                    items: { type: Type.STRING }
+                                },
+                                correctIndex: { type: Type.INTEGER }
+                            },
+                            required: ["id", "question", "options", "correctIndex"]
+                        }
+                    }
+                },
+                required: ["questions"]
+            }
+        }
+    }));
+    const parsed = parseResponse(response.text);
+    return (parsed.questions || []).slice(0, 20); // Force 20
+};
+
+export const generateExamTheory = async (domain: SkillDomain): Promise<ExamTheory[]> => {
+     const ai = getAiClient();
+     const prompt = `Generate exactly 30 Theory/Architecture questions for ${domain}.
+     Focus: System Design, Scalability, Trade-offs.`;
+     
+     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: REASONING_MODEL,
+        contents: prompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    questions: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                id: { type: Type.INTEGER },
+                                question: { type: Type.STRING }
+                            },
+                            required: ["id", "question"]
+                        }
+                    }
+                },
+                required: ["questions"]
+            }
+        }
+    }));
+    const parsed = parseResponse(response.text);
+    return (parsed.questions || []).slice(0, 30); // Force 30
+};
+
+export const generateExamPractical = async (domain: SkillDomain): Promise<ExamPractical[]> => {
+    const ai = getAiClient();
+    const prompt = `Generate exactly 10 Practical Coding/Engineering tasks for ${domain}.
+    Environment: Sandbox-ready constraints.`;
+    
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: REASONING_MODEL,
+        contents: prompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    tasks: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                id: { type: Type.INTEGER },
+                                task: { type: Type.STRING },
+                                constraints: { 
+                                    type: Type.ARRAY,
+                                    items: { type: Type.STRING }
+                                }
+                            },
+                            required: ["id", "task", "constraints"]
+                        }
+                    }
+                },
+                required: ["tasks"]
+            }
+        }
+    }));
+    const parsed = parseResponse(response.text);
+    return (parsed.tasks || []).slice(0, 10); // Force 10
+};
+
+export const gradeExamSections = async (domain: SkillDomain, theory: ExamTheory[], practical: ExamPractical[]): Promise<{ theoryScore: number, practicalScore: number, feedback: string }> => {
+    const ai = getAiClient();
+    const prompt = `Grade ${domain} Exam.
+    Theory Input: ${JSON.stringify(theory)}
+    Practical Input: ${JSON.stringify(practical)}
+    
+    Grading Rules:
+    - Semantic Similarity Matching for Theory.
+    - Logic Correctness for Practical.
+    - Strict adherence to constraints.
+    - 0-100 Integer Score per section.`;
+
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: REASONING_MODEL,
+        contents: prompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    theoryScore: { type: Type.INTEGER },
+                    practicalScore: { type: Type.INTEGER },
+                    feedback: { type: Type.STRING }
+                },
+                required: ["theoryScore", "practicalScore", "feedback"]
+            }
+        }
+    }));
+    return parseResponse(response.text);
+};
+
+// --- INTERVIEW (DYNAMIC) ---
+
+export const generateInterviewQuestion = async (domain: SkillDomain, lastScore: number, roundNum: number): Promise<{ text: string, timeLimit: number }> => {
+     const ai = getAiClient();
+     const prompt = `Generate Question #${roundNum}/20 for ${domain}. 
+     Adaptive Difficulty: Previous Score was ${lastScore}.
+     Return time limit in seconds (30-90).`;
+     
+     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: GENERATION_MODEL,
+        contents: prompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    text: { type: Type.STRING },
+                    timeLimit: { type: Type.INTEGER }
+                },
+                required: ["text", "timeLimit"]
+            }
+        }
+    }));
+    return parseResponse(response.text);
+};
+
+export const evaluateInterviewResponse = async (domain: SkillDomain, question: string, answer: string): Promise<{ score: number, feedback: string, spokenFeedback: string }> => {
+    const ai = getAiClient();
+    const prompt = `Evaluate Spoken Response for ${domain}.
+    Question: ${question}
+    Answer (ASR Transcript): ${answer}
+    
+    Analysis:
+    - Technical Accuracy (Weight 60%)
+    - Communication Clarity (Weight 40%)
+    - Intent Analysis.
+    `;
+    
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: GENERATION_MODEL,
+        contents: prompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    score: { type: Type.INTEGER },
+                    feedback: { type: Type.STRING },
+                    spokenFeedback: { type: Type.STRING }
+                },
+                required: ["score", "feedback", "spokenFeedback"]
+            }
+        }
+    }));
+    return parseResponse(response.text);
+};
+
+// --- CHALLENGE SCENARIO ---
+
 export const generateChallengeScenario = async (domain: SkillDomain): Promise<{ taskDescription: string, checkpoints: ChallengeCheckpoint[] }> => {
     const ai = getAiClient();
-    const prompt = `Create a coding challenge for ${domain} with incremental checkpoints.`;
+    const prompt = `Create a deterministic coding challenge for ${domain}.`;
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: REASONING_MODEL,
         contents: prompt,
@@ -215,7 +426,10 @@ export const generateChallengeScenario = async (domain: SkillDomain): Promise<{ 
 
 export const validateChallengeStep = async (domain: SkillDomain, stepTitle: string, code: string): Promise<{ success: boolean, score: number, feedback: string }> => {
     const ai = getAiClient();
-    const prompt = `Validate the code for step "${stepTitle}" in ${domain}. Code: ${code}`;
+    const prompt = `Validate code against checkpoint "${stepTitle}" in ${domain}. 
+    Code: ${code}
+    Output: Deterministic Boolean Success.`;
+    
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: GENERATION_MODEL,
         contents: prompt,
@@ -229,173 +443,6 @@ export const validateChallengeStep = async (domain: SkillDomain, stepTitle: stri
                     feedback: { type: Type.STRING }
                 },
                 required: ["success", "score", "feedback"]
-            }
-        }
-    }));
-    return parseResponse(response.text);
-};
-
-export const generateInterviewQuestion = async (domain: SkillDomain, lastScore: number, roundNum: number): Promise<{ text: string, timeLimit: number }> => {
-     const ai = getAiClient();
-     const prompt = `Generate interview question #${roundNum} for ${domain}. Previous score: ${lastScore}.`;
-     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-        model: GENERATION_MODEL,
-        contents: prompt,
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    text: { type: Type.STRING },
-                    timeLimit: { type: Type.INTEGER }
-                },
-                required: ["text", "timeLimit"]
-            }
-        }
-    }));
-    return parseResponse(response.text);
-};
-
-export const evaluateInterviewResponse = async (domain: SkillDomain, question: string, answer: string): Promise<{ score: number, feedback: string, spokenFeedback: string }> => {
-    const ai = getAiClient();
-    const prompt = `Evaluate answer for ${domain}. Question: ${question}. Answer: ${answer}.`;
-    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-        model: GENERATION_MODEL,
-        contents: prompt,
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    score: { type: Type.INTEGER },
-                    feedback: { type: Type.STRING },
-                    spokenFeedback: { type: Type.STRING }
-                },
-                required: ["score", "feedback", "spokenFeedback"]
-            }
-        }
-    }));
-    return parseResponse(response.text);
-};
-
-export const generateExamMCQs = async (domain: SkillDomain): Promise<ExamMCQ[]> => {
-    const ai = getAiClient();
-    const prompt = `Generate 20 MCQ questions for ${domain}.`;
-    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-        model: REASONING_MODEL,
-        contents: prompt,
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    questions: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                id: { type: Type.INTEGER },
-                                question: { type: Type.STRING },
-                                options: { 
-                                    type: Type.ARRAY,
-                                    items: { type: Type.STRING }
-                                },
-                                correctIndex: { type: Type.INTEGER }
-                            },
-                            required: ["id", "question", "options", "correctIndex"]
-                        }
-                    }
-                },
-                required: ["questions"]
-            }
-        }
-    }));
-    const parsed = parseResponse(response.text);
-    return parsed.questions || [];
-};
-
-export const generateExamTheory = async (domain: SkillDomain): Promise<ExamTheory[]> => {
-     const ai = getAiClient();
-     const prompt = `Generate 5 theory questions for ${domain}.`;
-     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-        model: REASONING_MODEL,
-        contents: prompt,
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    questions: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                id: { type: Type.INTEGER },
-                                question: { type: Type.STRING }
-                            },
-                            required: ["id", "question"]
-                        }
-                    }
-                },
-                required: ["questions"]
-            }
-        }
-    }));
-    const parsed = parseResponse(response.text);
-    return parsed.questions || [];
-};
-
-export const generateExamPractical = async (domain: SkillDomain): Promise<ExamPractical[]> => {
-    const ai = getAiClient();
-    const prompt = `Generate 2 practical coding tasks for ${domain}.`;
-    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-        model: REASONING_MODEL,
-        contents: prompt,
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    tasks: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                id: { type: Type.INTEGER },
-                                task: { type: Type.STRING },
-                                constraints: { 
-                                    type: Type.ARRAY,
-                                    items: { type: Type.STRING }
-                                }
-                            },
-                            required: ["id", "task", "constraints"]
-                        }
-                    }
-                },
-                required: ["tasks"]
-            }
-        }
-    }));
-    const parsed = parseResponse(response.text);
-    return parsed.tasks || [];
-};
-
-export const gradeExamSections = async (domain: SkillDomain, theory: ExamTheory[], practical: ExamPractical[]): Promise<{ theoryScore: number, practicalScore: number, feedback: string }> => {
-    const ai = getAiClient();
-    const prompt = `Grade the theory and practical sections for ${domain}. Theory: ${JSON.stringify(theory)}. Practical: ${JSON.stringify(practical)}.`;
-    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-        model: REASONING_MODEL,
-        contents: prompt,
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    theoryScore: { type: Type.INTEGER },
-                    practicalScore: { type: Type.INTEGER },
-                    feedback: { type: Type.STRING }
-                },
-                required: ["theoryScore", "practicalScore", "feedback"]
             }
         }
     }));

@@ -17,21 +17,22 @@ app.use(express.json());
 // Routes
 app.post('/api/create-checkout-session', async (req, res) => {
   if (!stripe) {
-    return res.status(500).json({ error: "Stripe Secret Key missing in local environment." });
+    return res.status(500).json({ error: "Server Misconfiguration: Stripe Secret Key missing." });
   }
 
   const { userId, email, returnUrl, type, plan } = req.body;
   
-  // Dynamic Configuration based on Type and Plan
+  // SECURITY ENFORCEMENT: Fixed Pricing Logic
+  // No client-side price manipulation allowed.
   let productName = 'Professional Certification Exam';
-  let amount = 5000; // Default $50.00
-  let description = 'One-time access to the Exam Hall';
+  let amount = 5000; // STRICT $50.00
+  let description = 'One-time access. Non-refundable.';
   
   if (type === 'subscription') {
     productName = 'PSN Verified Membership';
     if (plan === 'yearly') {
         amount = 30000; // $300.00
-        description = 'Yearly Verified Membership (Save 15%)';
+        description = 'Yearly Verified Membership';
     } else {
         amount = 2900; // $29.00
         description = 'Monthly Verified Membership';
@@ -61,7 +62,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
       metadata: {
         userId,
         product: type,
-        plan: plan || 'one_time'
+        security_token: `SECURE_${Date.now()}_${userId}` // Traceability
       },
       customer_email: email,
     });
