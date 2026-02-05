@@ -21,14 +21,21 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
   const navigate = useNavigate();
   // Modes: lobby, waiting (private host), queue (public), race, results
   const [mode, setMode] = useState<'lobby' | 'waiting' | 'queue' | 'race' | 'results'>('lobby');
-  const [selectedDomain, setSelectedDomain] = useState<SkillDomain>(SkillDomain.ALGORITHMS);
+  
+  // Public Selection
+  const [publicDomain, setPublicDomain] = useState<SkillDomain>(SkillDomain.ALGORITHMS);
   
   // Private Session State
+  const [privateDomain, setPrivateDomain] = useState<SkillDomain>(SkillDomain.ALGORITHMS);
   const [sessionCode, setSessionCode] = useState<string>("");
   const [joinInput, setJoinInput] = useState<string>("");
   const [isHost, setIsHost] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
   const [sessionData, setSessionData] = useState<ChallengeSession | null>(null);
+  
+  // Host Generation State
+  const [isGeneratingTask, setIsGeneratingTask] = useState(false);
+  const [generatedTaskReady, setGeneratedTaskReady] = useState(false);
 
   // Race State
   const [task, setTask] = useState<string>("");
@@ -60,6 +67,7 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
             setCheckpoints(data.checkpoints || []);
             setMode('race');
             setIsPrivate(true);
+            setGeneratedTaskReady(true); // Ensure client knows it's ready
             addFeed("Private Session Started!");
           }
         } else {
@@ -124,8 +132,6 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
     };
     
     const preventPaste = (e: ClipboardEvent) => {
-       // Optional: We might allow paste into the editor, but prevent copy FROM the question
-       // For this strict arena, let's block paste into editor too to enforce typing
        e.preventDefault();
        handleViolation("Paste Attempt Blocked");
     };
@@ -164,11 +170,11 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
   useEffect(() => {
     if (mode === 'queue') {
       const timer = setTimeout(() => {
-        startPublicRace();
+        startPublicRace(publicDomain);
       }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [mode]);
+  }, [mode, publicDomain]);
 
   // Race Loop (Bot Simulation OR Timer)
   useEffect(() => {
@@ -215,15 +221,37 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
   };
 
   const handleCreatePrivateSession = async () => {
-    const code = await challengeService.createSession(user, selectedDomain);
+    // 1. Create Session immediately (Optimistic UI)
+    const code = await challengeService.createSession(user, privateDomain);
+    
     if (code === "OFFLINE") {
       alert("Backend is not configured. Falling back to public mode.");
       return;
     }
+
+    // 2. Enter Waiting Room immediately
     setSessionCode(code);
     setIsHost(true);
     setIsPrivate(true);
     setMode('waiting');
+    setIsGeneratingTask(true);
+    setGeneratedTaskReady(false);
+
+    // 3. Background: Generate & Update Task
+    try {
+      const scenario = await generateChallengeScenario(privateDomain);
+      await challengeService.setSessionScenario(code, scenario.taskDescription, scenario.checkpoints);
+      
+      // Update local state for the host
+      setTask(scenario.taskDescription);
+      setCheckpoints(scenario.checkpoints);
+      setGeneratedTaskReady(true);
+    } catch (e) {
+      console.error("Generation failed", e);
+      addFeed("Error: Failed to generate task. Please recreate session.");
+    } finally {
+      setIsGeneratingTask(false);
+    }
   };
 
   const handleJoinSession = async () => {
@@ -241,16 +269,15 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
 
   const handleStartPrivateRace = async () => {
     if (!isHost || !sessionCode) return;
+    if (!generatedTaskReady) {
+      alert("Please wait for the challenge generation to complete.");
+      return;
+    }
     
-    // Generate content once as host
-    const scenario = await generateChallengeScenario(selectedDomain);
-    
-    // Push to DB
-    await challengeService.startSession(sessionCode, scenario.taskDescription, scenario.checkpoints);
-    // Local update happens via subscription
+    // Just trigger status update - Everyone transitions instantly
+    await challengeService.startSession(sessionCode);
   };
 
-  // Explicitly handle user leaving via UI
   const handleLeaveLobby = () => {
     if (sessionCode && user.id) {
        challengeService.leaveSession(sessionCode, user.id);
@@ -261,10 +288,12 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
     setSessionData(null);
     setParticipants([]);
     setMode('lobby');
+    setGeneratedTaskReady(false);
+    setIsGeneratingTask(false);
   };
 
-  const startPublicRace = async () => {
-    const scenario = await generateChallengeScenario(selectedDomain);
+  const startPublicRace = async (domain: SkillDomain) => {
+    const scenario = await generateChallengeScenario(domain);
     setTask(scenario.taskDescription);
     setCheckpoints(scenario.checkpoints);
     setIsPrivate(false);
@@ -302,7 +331,9 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
     const cp = checkpoints.find(c => c.id === checkpointId);
     if (!cp) return;
 
-    const result = await validateChallengeStep(selectedDomain, cp.title, code);
+    // Use privateDomain if private, else publicDomain
+    const domainToUse = isPrivate ? privateDomain : publicDomain;
+    const result = await validateChallengeStep(domainToUse, cp.title, code);
     
     setValidating(false);
     
@@ -373,8 +404,8 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
                 {Object.values(SkillDomain).map(d => (
                   <button
                     key={d}
-                    onClick={() => setSelectedDomain(d)}
-                    className={`p-2 rounded-lg text-xs text-left border transition-all truncate ${selectedDomain === d ? 'bg-purple-900/40 border-purple-500 text-purple-300' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}`}
+                    onClick={() => setPublicDomain(d)}
+                    className={`p-2 rounded-lg text-xs text-left border transition-all truncate ${publicDomain === d ? 'bg-purple-900/40 border-purple-500 text-purple-300' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}`}
                     title={d}
                   >
                     {d}
@@ -404,7 +435,7 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
             
             <div className="space-y-6">
               <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700">
-                <label className="text-sm text-slate-400 block mb-2">Have a code?</label>
+                <label className="text-sm text-slate-400 block mb-2">Join Code</label>
                 <div className="flex gap-2">
                   <input 
                     type="text" 
@@ -432,10 +463,23 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
                   <span className="px-2 bg-slate-800 text-slate-500">or</span>
                 </div>
               </div>
+              
+              <div className="space-y-2">
+                 <label className="text-sm text-slate-400 block">Host a Challenge</label>
+                 <select 
+                    value={privateDomain}
+                    onChange={(e) => setPrivateDomain(e.target.value as SkillDomain)}
+                    className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white focus:border-green-500 outline-none"
+                 >
+                    {Object.values(SkillDomain).map(d => (
+                       <option key={d} value={d}>{d}</option>
+                    ))}
+                 </select>
+              </div>
 
               <button 
                 onClick={handleCreatePrivateSession}
-                className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white font-medium rounded-xl border border-slate-600 transition-colors"
+                className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white font-medium rounded-xl border border-slate-600 transition-colors flex items-center justify-center gap-2"
               >
                 Create New Session
               </button>
@@ -463,7 +507,13 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
         
         <div className="relative z-10 p-8">
             <h2 className="text-4xl font-bold text-white mb-2 tracking-tight">Lobby Active</h2>
-            <p className="text-purple-300 mb-8 font-medium">Waiting for players to join the arena...</p>
+            <div className="flex items-center justify-center gap-3 mb-8">
+               <span className="px-3 py-1 bg-purple-900/40 border border-purple-500/30 rounded-full text-purple-300 text-sm font-bold">
+                  {isPrivate ? privateDomain : publicDomain}
+               </span>
+               <span className="text-slate-500">•</span>
+               <span className="text-slate-400 font-medium">Waiting for players...</span>
+            </div>
 
             <div className="bg-black/40 backdrop-blur-md p-8 rounded-2xl border border-purple-500/30 mb-8 max-w-lg mx-auto shadow-2xl">
                <div className="text-xs text-purple-400 mb-3 uppercase tracking-[0.2em] font-bold">Session Code</div>
@@ -495,12 +545,23 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
             </div>
 
             {isHost ? (
-              <button 
-                onClick={handleStartPrivateRace}
-                className="px-12 py-5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white text-xl font-bold rounded-2xl shadow-xl shadow-green-900/40 transition-all flex items-center justify-center gap-3 mx-auto transform hover:scale-105 active:scale-95"
-              >
-                <Play size={24} fill="currentColor" /> START RACE
-              </button>
+               <div className="space-y-4">
+                 {isGeneratingTask ? (
+                    <div className="flex items-center justify-center gap-3 text-purple-400 animate-pulse font-medium">
+                       <Loader2 size={20} className="animate-spin" />
+                       Generating Challenge Scenarios...
+                    </div>
+                 ) : (
+                    <button 
+                      onClick={handleStartPrivateRace}
+                      disabled={!generatedTaskReady}
+                      className="px-12 py-5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white text-xl font-bold rounded-2xl shadow-xl shadow-green-900/40 transition-all flex items-center justify-center gap-3 mx-auto transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:scale-100 disabled:cursor-not-allowed"
+                    >
+                      <Play size={24} fill="currentColor" /> START RACE
+                    </button>
+                 )}
+                 {generatedTaskReady && <p className="text-xs text-green-400">Challenge Generated & Ready</p>}
+               </div>
             ) : (
               <div className="flex flex-col items-center justify-center gap-4 text-slate-400 animate-pulse">
                 <Loader2 size={32} className="animate-spin text-purple-500" /> 
@@ -555,6 +616,8 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
   }
 
   // RACE MODE
+  const currentDomain = isPrivate ? privateDomain : publicDomain;
+
   return (
     <div className="h-[calc(100vh-100px)] flex flex-col gap-4">
       {/* Top Bar */}
@@ -563,7 +626,7 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
            <span className="text-sm font-bold text-purple-400 uppercase tracking-widest border border-purple-500/30 px-2 py-1 rounded bg-purple-900/20">
              {isPrivate ? 'PRIVATE DUEL' : 'LIVE RACE'}
            </span>
-           <span className="text-slate-300 font-medium hidden sm:inline">{selectedDomain} Challenge</span>
+           <span className="text-slate-300 font-medium hidden sm:inline">{currentDomain} Challenge</span>
         </div>
         <div className="flex items-center gap-4">
             {violationCount > 0 && (

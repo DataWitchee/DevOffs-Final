@@ -1,5 +1,5 @@
 import { db } from './auth';
-import { doc, setDoc, getDoc, onSnapshot, updateDoc, arrayUnion, runTransaction } from 'firebase/firestore';
+import { doc, setDoc, getDoc, onSnapshot, updateDoc, runTransaction } from 'firebase/firestore';
 import { User, SkillDomain, ChallengeParticipant, ChallengeCheckpoint } from '../types';
 
 export interface ChallengeSession {
@@ -26,7 +26,8 @@ interface ChallengeService {
   createSession(host: User, domain: SkillDomain): Promise<string>;
   joinSession(code: string, user: User): Promise<{ success: boolean; message?: string }>;
   leaveSession(code: string, userId: string): Promise<void>;
-  startSession(code: string, taskDescription: string, checkpoints: ChallengeCheckpoint[]): Promise<void>;
+  setSessionScenario(code: string, taskDescription: string, checkpoints: ChallengeCheckpoint[]): Promise<void>;
+  startSession(code: string): Promise<void>;
   updateProgress(code: string, userId: string, progress: number, status: 'coding' | 'validating' | 'finished'): Promise<void>;
   subscribeToSession(code: string, callback: (data: ChallengeSession | null) => void): () => void;
 }
@@ -110,14 +111,22 @@ const firebaseImplementation: ChallengeService = {
     } catch (e) { console.warn("Leave failed", e); }
   },
 
-  async startSession(code: string, taskDescription: string, checkpoints: ChallengeCheckpoint[]): Promise<void> {
+  async setSessionScenario(code: string, taskDescription: string, checkpoints: ChallengeCheckpoint[]): Promise<void> {
+    try {
+      const sessionRef = doc(db, 'challenges', code);
+      await updateDoc(sessionRef, {
+        taskDescription,
+        checkpoints
+      });
+    } catch (e) { console.warn("Set Scenario failed", e); }
+  },
+
+  async startSession(code: string): Promise<void> {
     try {
       const sessionRef = doc(db, 'challenges', code);
       await updateDoc(sessionRef, {
         status: 'active',
-        startTime: Date.now(),
-        taskDescription,
-        checkpoints
+        startTime: Date.now()
       });
     } catch (e) { console.warn("Start failed", e); }
   },
@@ -217,13 +226,20 @@ const mockImplementation: ChallengeService = {
     }
   },
 
-  async startSession(code: string, taskDescription: string, checkpoints: ChallengeCheckpoint[]): Promise<void> {
+  async setSessionScenario(code: string, taskDescription: string, checkpoints: ChallengeCheckpoint[]): Promise<void> {
+    const db = getMockDB();
+    if (db[code]) {
+      db[code].taskDescription = taskDescription;
+      db[code].checkpoints = checkpoints;
+      saveMockDB(db);
+    }
+  },
+
+  async startSession(code: string): Promise<void> {
     const db = getMockDB();
     if (db[code]) {
       db[code].status = 'active';
       db[code].startTime = Date.now();
-      db[code].taskDescription = taskDescription;
-      db[code].checkpoints = checkpoints;
       saveMockDB(db);
     }
   },
