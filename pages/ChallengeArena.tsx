@@ -454,54 +454,64 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
   // WAITING ROOM (Private)
   if (mode === 'waiting') {
     return (
-      <div className="max-w-2xl mx-auto py-12 animate-fade-in text-center">
-        <h2 className="text-3xl font-bold text-white mb-2">Waiting Room</h2>
-        <p className="text-slate-400 mb-8">Waiting for players to join...</p>
-
-        <div className="bg-slate-800 p-8 rounded-2xl border border-slate-700 mb-8">
-           <div className="text-sm text-slate-500 mb-2 uppercase tracking-widest font-bold">Session Code</div>
-           <div 
-             onClick={copyCodeToClipboard}
-             className="inline-flex items-center gap-4 bg-slate-900 px-8 py-4 rounded-xl border border-dashed border-purple-500 cursor-pointer hover:bg-slate-900/80 transition-colors group"
-           >
-             <span className="text-4xl font-mono font-bold text-purple-400 tracking-[0.5em]">{sessionCode}</span>
-             <Copy size={20} className="text-slate-500 group-hover:text-white" />
-           </div>
-           {copySuccess && <p className="text-green-400 text-sm mt-2">Copied to clipboard!</p>}
+      <div className="max-w-4xl mx-auto py-12 animate-fade-in text-center relative overflow-hidden rounded-3xl mt-8">
+        {/* Solid Background Effect */}
+        <div className="absolute inset-0 bg-slate-900">
+           <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-purple-900/40 via-slate-900 to-slate-950"></div>
+           <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.15) 1px, transparent 0)', backgroundSize: '40px 40px' }}></div>
         </div>
+        
+        <div className="relative z-10 p-8">
+            <h2 className="text-4xl font-bold text-white mb-2 tracking-tight">Lobby Active</h2>
+            <p className="text-purple-300 mb-8 font-medium">Waiting for players to join the arena...</p>
 
-        <div className="bg-slate-800/50 p-6 rounded-2xl border border-slate-700 mb-8">
-           <h3 className="text-white font-bold mb-4 flex items-center justify-center gap-2">
-             <Users size={18} /> Participants ({participants?.length || 0})
-           </h3>
-           <div className="space-y-2">
-             {participants.map(p => (
-               <div key={p.id} className="flex items-center gap-3 p-3 bg-slate-700/50 rounded-lg">
-                 <div className="w-8 h-8 bg-purple-900 rounded-full flex items-center justify-center text-purple-300 font-bold text-xs">
-                   {p.name.charAt(0)}
-                 </div>
-                 <span className="text-white">{p.name} {p.id === user.id ? "(You)" : ""}</span>
+            <div className="bg-black/40 backdrop-blur-md p-8 rounded-2xl border border-purple-500/30 mb-8 max-w-lg mx-auto shadow-2xl">
+               <div className="text-xs text-purple-400 mb-3 uppercase tracking-[0.2em] font-bold">Session Code</div>
+               <div 
+                 onClick={copyCodeToClipboard}
+                 className="inline-flex items-center gap-6 bg-purple-900/20 px-10 py-6 rounded-xl border border-dashed border-purple-400/50 cursor-pointer hover:bg-purple-900/30 transition-all group hover:scale-105 active:scale-95"
+               >
+                 <span className="text-5xl font-mono font-bold text-white tracking-[0.2em] drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]">{sessionCode}</span>
+                 <Copy size={24} className="text-purple-400 group-hover:text-white" />
                </div>
-             ))}
-           </div>
+               {copySuccess && <p className="text-green-400 text-sm mt-3 font-bold animate-pulse">Copied to clipboard!</p>}
+            </div>
+
+            <div className="bg-slate-800/60 backdrop-blur p-6 rounded-2xl border border-slate-700/50 mb-12 max-w-2xl mx-auto">
+               <h3 className="text-white font-bold mb-6 flex items-center justify-center gap-2 border-b border-slate-700 pb-4">
+                 <Users size={20} className="text-cyan-400" /> 
+                 Participants ({participants?.length || 0})
+               </h3>
+               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                 {participants.map(p => (
+                   <div key={p.id} className="flex items-center gap-3 p-3 bg-slate-700/50 rounded-lg border border-slate-600/50">
+                     <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-lg">
+                       {p.name.charAt(0)}
+                     </div>
+                     <span className="text-white font-medium truncate">{p.name} {p.id === user.id ? "(You)" : ""}</span>
+                   </div>
+                 ))}
+               </div>
+            </div>
+
+            {isHost ? (
+              <button 
+                onClick={handleStartPrivateRace}
+                className="px-12 py-5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white text-xl font-bold rounded-2xl shadow-xl shadow-green-900/40 transition-all flex items-center justify-center gap-3 mx-auto transform hover:scale-105 active:scale-95"
+              >
+                <Play size={24} fill="currentColor" /> START RACE
+              </button>
+            ) : (
+              <div className="flex flex-col items-center justify-center gap-4 text-slate-400 animate-pulse">
+                <Loader2 size={32} className="animate-spin text-purple-500" /> 
+                <span className="font-medium">Waiting for host to start the engine...</span>
+              </div>
+            )}
+
+            <button onClick={handleLeaveLobby} className="mt-12 text-slate-500 hover:text-white text-sm font-medium transition-colors border-b border-transparent hover:border-white pb-1">
+              Leave Lobby
+            </button>
         </div>
-
-        {isHost ? (
-          <button 
-            onClick={handleStartPrivateRace}
-            className="px-8 py-4 bg-green-600 hover:bg-green-500 text-white text-lg font-bold rounded-xl shadow-lg shadow-green-900/20 transition-all flex items-center justify-center gap-2 mx-auto"
-          >
-            <Play size={20} fill="currentColor" /> Start Race
-          </button>
-        ) : (
-          <div className="flex items-center justify-center gap-2 text-slate-400 animate-pulse">
-            <Loader2 size={20} className="animate-spin" /> Waiting for host to start...
-          </div>
-        )}
-
-        <button onClick={handleLeaveLobby} className="mt-8 text-slate-500 hover:text-white">
-          Leave Lobby
-        </button>
       </div>
     );
   }

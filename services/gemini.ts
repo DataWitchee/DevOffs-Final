@@ -26,6 +26,23 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000): Pr
   }
 }
 
+// Helper to clean JSON strings from Markdown formatting often returned by LLMs
+const cleanJson = (text: string | undefined): string => {
+  if (!text) return "{}";
+  // Remove markdown code blocks if present (e.g., ```json ... ```)
+  let clean = text.replace(/```json/g, "").replace(/```/g, "");
+  return clean.trim();
+};
+
+const parseResponse = (text: string | undefined) => {
+  try {
+    return JSON.parse(cleanJson(text));
+  } catch (e) {
+    console.error("Failed to parse AI response:", text);
+    return {};
+  }
+};
+
 export const analyzeEnvironmentSnapshot = async (
   imageBase64: string
 ): Promise<{ lighting: boolean; singlePerson: boolean; noDevices: boolean; feedback: string }> => {
@@ -70,9 +87,7 @@ export const analyzeEnvironmentSnapshot = async (
       }
     }), 1, 3000);
     
-    const text = response.text;
-    if (!text) throw new Error("No response");
-    return JSON.parse(text);
+    return parseResponse(response.text);
 
   } catch (error) {
     console.error("Proctoring Check Failed:", error);
@@ -116,7 +131,7 @@ export const generateSkillTrial = async (domain: SkillDomain): Promise<{ questio
             }
         }
     }));
-    return JSON.parse(response.text || "{}");
+    return parseResponse(response.text);
 };
 
 export const evaluatePerformance = async (
@@ -162,7 +177,7 @@ export const evaluatePerformance = async (
             }
         }
     }));
-    return JSON.parse(response.text || "{}");
+    return parseResponse(response.text);
 };
 
 export const generateChallengeScenario = async (domain: SkillDomain): Promise<{ taskDescription: string, checkpoints: ChallengeCheckpoint[] }> => {
@@ -195,7 +210,7 @@ export const generateChallengeScenario = async (domain: SkillDomain): Promise<{ 
             }
         }
     }));
-    return JSON.parse(response.text || "{}");
+    return parseResponse(response.text);
 };
 
 export const validateChallengeStep = async (domain: SkillDomain, stepTitle: string, code: string): Promise<{ success: boolean, score: number, feedback: string }> => {
@@ -217,7 +232,7 @@ export const validateChallengeStep = async (domain: SkillDomain, stepTitle: stri
             }
         }
     }));
-    return JSON.parse(response.text || "{}");
+    return parseResponse(response.text);
 };
 
 export const generateInterviewQuestion = async (domain: SkillDomain, lastScore: number, roundNum: number): Promise<{ text: string, timeLimit: number }> => {
@@ -238,7 +253,7 @@ export const generateInterviewQuestion = async (domain: SkillDomain, lastScore: 
             }
         }
     }));
-    return JSON.parse(response.text || "{}");
+    return parseResponse(response.text);
 };
 
 export const evaluateInterviewResponse = async (domain: SkillDomain, question: string, answer: string): Promise<{ score: number, feedback: string, spokenFeedback: string }> => {
@@ -260,7 +275,7 @@ export const evaluateInterviewResponse = async (domain: SkillDomain, question: s
             }
         }
     }));
-    return JSON.parse(response.text || "{}");
+    return parseResponse(response.text);
 };
 
 export const generateExamMCQs = async (domain: SkillDomain): Promise<ExamMCQ[]> => {
@@ -295,7 +310,7 @@ export const generateExamMCQs = async (domain: SkillDomain): Promise<ExamMCQ[]> 
             }
         }
     }));
-    const parsed = JSON.parse(response.text || "{}");
+    const parsed = parseResponse(response.text);
     return parsed.questions || [];
 };
 
@@ -326,7 +341,7 @@ export const generateExamTheory = async (domain: SkillDomain): Promise<ExamTheor
             }
         }
     }));
-    const parsed = JSON.parse(response.text || "{}");
+    const parsed = parseResponse(response.text);
     return parsed.questions || [];
 };
 
@@ -361,7 +376,7 @@ export const generateExamPractical = async (domain: SkillDomain): Promise<ExamPr
             }
         }
     }));
-    const parsed = JSON.parse(response.text || "{}");
+    const parsed = parseResponse(response.text);
     return parsed.tasks || [];
 };
 
@@ -384,5 +399,5 @@ export const gradeExamSections = async (domain: SkillDomain, theory: ExamTheory[
             }
         }
     }));
-    return JSON.parse(response.text || "{}");
+    return parseResponse(response.text);
 };
