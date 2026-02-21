@@ -42,8 +42,8 @@ export const UserMenu: React.FC<Props> = ({ user, onLogout }) => {
       >
         <div
           className={`w-10 h-10 rounded-full overflow-hidden border-2 transition-all duration-200 ${isOpen
-              ? 'border-cyan-400 ring-2 ring-cyan-400/20 scale-105'
-              : 'border-slate-600 group-hover:border-slate-400 group-hover:scale-105 group-hover:shadow-lg'
+            ? 'border-cyan-400 ring-2 ring-cyan-400/20 scale-105'
+            : 'border-slate-600 group-hover:border-slate-400 group-hover:scale-105 group-hover:shadow-lg'
             }`}
         >
           {user.avatar ? (
@@ -108,7 +108,7 @@ export const UserMenu: React.FC<Props> = ({ user, onLogout }) => {
             <MenuLink to="/profile" icon={<UserIcon size={18} />} label="View Profile" onClick={() => setIsOpen(false)} />
             <MenuLink to="/setup" icon={<Settings size={18} />} label="Account Settings" onClick={() => setIsOpen(false)} />
             <MenuLink to="/" icon={<Trophy size={18} />} label="My Trials & Achievements" onClick={() => setIsOpen(false)} />
-            <MenuLink to="/pricing" icon={<CreditCard size={18} />} label="Subscription Plan" onClick={() => setIsOpen(false)} />
+
           </div>
 
           {/* Section C: Log Out */}

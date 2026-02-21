@@ -104,9 +104,6 @@ const NavBar: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLogout
               <Link to="/talent" className={navClass('/talent')}>
                 <Search size={18} /> Recruiters
               </Link>
-              <Link to="/pricing" className={navClass('/pricing')}>
-                <CreditCard size={18} /> Membership
-              </Link>
               <div className="h-6 w-px bg-slate-800 mx-1"></div>
               <UserMenu user={user} onLogout={onLogout} />
             </>
@@ -135,7 +132,7 @@ const NavBar: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLogout
               <Link to="/" onClick={() => setIsOpen(false)} className="block text-slate-300 py-2">Dashboard</Link>
               <Link to="/leaderboard" onClick={() => setIsOpen(false)} className="block text-slate-300 py-2">Rankings</Link>
               <Link to="/talent" onClick={() => setIsOpen(false)} className="block text-slate-300 py-2">Talent Search</Link>
-              <Link to="/pricing" onClick={() => setIsOpen(false)} className="block text-slate-300 py-2">Pricing</Link>
+
               <Link to="/profile" onClick={() => setIsOpen(false)} className="block text-slate-300 py-2">My Profile</Link>
               <Link to="/skill-dna" onClick={() => setIsOpen(false)} className="block text-cyan-400 py-2 font-bold flex items-center gap-2"><Zap size={16} /> Skill DNA</Link>
             </>
