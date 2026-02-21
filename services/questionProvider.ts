@@ -229,7 +229,7 @@ export class QuestionService {
     async getQuestions(request: QuestionRequest): Promise<QuestionResponse[]> {
         const timeoutError = new Error("Provider Timeout");
         const timeout = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(timeoutError), 5000)
+            setTimeout(() => reject(timeoutError), 60000)
         );
 
         try {
@@ -238,7 +238,7 @@ export class QuestionService {
                 timeout
             ]);
         } catch (e) {
-            console.warn("Primary provider failed or timed out (5s). Falling back to LOCAL provider as a safety net.");
+            console.warn("Primary provider failed or timed out (60s). Falling back to LOCAL provider as a safety net.");
             // Fallback strategy to guarantee zero-error UX
             const fallbackProvider = new LocalProvider();
             return await fallbackProvider.generateQuestions(request);
