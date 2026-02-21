@@ -63,9 +63,9 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
       setTimeout(() => {
         // Map LocalQuestions to the format TrialRoom expects
         const fallbackQuestions = localQuestions.slice(0, EXACT_QUESTION_COUNT).map((q, idx) => ({
-          id: `local-bypass-${idx}`,
-          title: "Problem " + (idx + 1),
-          description: q.questionText,
+          id: `DEVOFFS-SR-${702 + idx}`,
+          category: q.type === 'Code' ? "Practical" : "Theoretical",
+          text: q.questionText || "Loading challenge details...",
           type: "coding",
           starterCode: q.starterCode || "",
           testCases: q.testCases || [],
