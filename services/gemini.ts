@@ -284,7 +284,7 @@ export const evaluateCodeSubmission = async (
     Analyze for correctness, time/space complexity, and edge cases. Provide a score out of 100.
     Output JSON.`;
 
-    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+    const apiCall = withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: FAST_MODEL,
         contents: prompt,
         config: {
@@ -300,6 +300,11 @@ export const evaluateCodeSubmission = async (
             }
         }
     }));
+
+    const timeout = new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 10000));
+    const response = await Promise.race([apiCall, timeout]);
+    if (!response) throw new Error("API Timeout");
+
     return parseResponse(response.text);
 };
 
@@ -318,7 +323,7 @@ export const simulateExecution = async (
     
     Output JSON.`;
 
-    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+    const apiCall = withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: FAST_MODEL,
         contents: prompt,
         config: {
@@ -334,6 +339,11 @@ export const simulateExecution = async (
             }
         }
     }));
+
+    const timeout = new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 10000));
+    const response = await Promise.race([apiCall, timeout]);
+    if (!response) throw new Error("API Timeout");
+
     return parseResponse(response.text);
 };
 

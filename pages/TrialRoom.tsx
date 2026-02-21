@@ -319,7 +319,26 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
       setIsEvaluating(false);
       setSession(prev => ({ ...prev, status: 'active' }));
     } catch (e) {
-      setSession(prev => ({ ...prev, status: 'completed', feedback: "API Limit Reached or Failed." }));
+      // Fallback to offline bank instead of aborting the endless loop
+      const nextIter = iteration + 1;
+      let filteredBank = localQuestions.filter((q: any) => q.category === domain);
+      if (filteredBank.length === 0) filteredBank = localQuestions.filter((q: any) => q.category === 'DSA');
+      if (filteredBank.length === 0) filteredBank = localQuestions;
+
+      const randomFallback = filteredBank[Math.floor(Math.random() * filteredBank.length)] as any;
+      setQuestions([{
+        id: `FALLBACK-${Date.now()}`,
+        text: randomFallback.questionText || "Solve this offline algorithmic challenge securely.",
+        category: "Practical",
+        starterCode: randomFallback.starterCode || "function solution(args) {\n  // Type code here\n}",
+        constraints: randomFallback.constraints || ["Time: O(N)"]
+      } as any]);
+
+      setCurrentQuestionIdx(0);
+      setIteration(nextIter);
+      setShowReview({ visible: false, logs: [] });
+      setIsEvaluating(false);
+      setSession(prev => ({ ...prev, status: 'active' }));
     }
   };
 
