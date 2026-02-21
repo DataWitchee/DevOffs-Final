@@ -185,8 +185,8 @@ export class LocalProvider implements IQuestionProvider {
             const questionData = localQuestions[randomIndex];
 
             results.push({
-                id: `local-${Date.now()}-${i}`,
-                ...questionData
+                ...questionData,
+                id: `local-${Date.now()}-${i}`
             });
         }
         return results;
