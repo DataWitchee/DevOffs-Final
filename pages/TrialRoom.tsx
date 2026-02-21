@@ -19,9 +19,9 @@ const TRIAL_DURATION = 3600; // 60 minutes
 const EXACT_QUESTION_COUNT = 10;
 
 // Strict thresholds for rejection
-const MAX_TAB_SWITCHES = 2;
-const MAX_PASTES = 0;
-const MAX_FOCUS_LOST_TIME = 5000;
+const MAX_TAB_SWITCHES = 3;
+const MAX_PASTES = 5;
+const MAX_FOCUS_LOST_TIME = 10000;
 
 export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
   const [isTerminated, setIsTerminated] = useState(false);
@@ -83,59 +83,42 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
 
       const codeToRun = userCode;
 
-      // REAL COMPILER API CALL (Piston v2)
-      const pistonVersion = language === 'cpp' ? '10.2.0' : '3.10.0';
-      const pistonLang = language === 'cpp' ? 'cpp' : 'python';
-
-      const res = await fetch('https://emkc.org/api/v2/piston/execute', {
+      // Route through our backend /api/execute to avoid CORS issues
+      const BACKEND_URL = 'https://devoffs-api.onrender.com';
+      const res = await fetch(`${BACKEND_URL}/api/execute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          language: pistonLang,
-          version: pistonVersion,
-          files: [{ content: codeToRun }],
-          stdin: "",
-          args: [],
-          compile_timeout: 10000,
-          run_timeout: 3000,
-          compile_memory_limit: -1,
-          run_memory_limit: -1
-        })
+        body: JSON.stringify({ code: codeToRun, language })
       });
 
       if (!res.ok) throw new Error("Compiler API failed");
       const pistonData = await res.json();
 
-      const compileErr = pistonData.compile?.output;
-      const runErr = pistonData.run?.stderr;
-      const stdOut = pistonData.run?.stdout;
+      const stdOut = pistonData.stdout || '';
+      const stdErr = pistonData.stderr || '';
+      const isError = !!stdErr || pistonData.code !== 0;
 
-      const isError = !!compileErr || !!runErr || pistonData.run?.code !== 0;
+      const terminalOutput = `[${language.toUpperCase()} COMPILER — DevOffs Engine]\n\n` +
+        (isError ? `ERROR:\n${stdErr || stdOut}\n` : `OUTPUT:\n${stdOut || '(No output generated)'}\n`);
 
-      const terminalOutput = `[${language.toUpperCase()} COMPILER v${pistonVersion}]\n\n` +
-        (compileErr ? `COMPILATION ERROR:\n${compileErr}\n` : '') +
-        (isError && runErr ? `RUNTIME ERROR:\n${runErr}\n` : '') +
-        ((stdOut && !isError) ? `OUTPUT:\n${stdOut}\n` : '') +
-        ((!stdOut && !isError && !compileErr) ? `(No output generated)` : '');
-
-      setConsoleOutput({ stdout: terminalOutput, time: 0, memory: 0, complexity: "N/A" });
+      setConsoleOutput({ stdout: terminalOutput, time: pistonData.time || 0, memory: pistonData.memory || 0, complexity: 'N/A' });
 
       if (isError) {
         setShowReview({
           visible: true,
           logs: [
-            "[SYSTEM] Compiling solution...",
-            "❌ Compilation / Runtime Error Detected",
-            "[ERROR] Execution Failed. Check console."
+            '[SYSTEM] Compiling solution...',
+            '❌ Compilation / Runtime Error Detected',
+            '[ERROR] Fix the error shown in the console panel below.'
           ]
         });
       } else {
         setShowReview({
           visible: true,
           logs: [
-            "[SYSTEM] Compiling solution...",
-            "✅ Code Execution Successful",
-            "[SUCCESS] Verification Complete. Ready for AI Judge."
+            '[SYSTEM] Compiling solution...',
+            '✅ Code Executed Successfully',
+            '[SUCCESS] Ready to Submit to AI Judge.'
           ]
         });
       }
