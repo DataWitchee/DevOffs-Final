@@ -11,10 +11,17 @@ import { debugRouter } from './routes/debug.ts';
 dotenv.config();
 
 const app = express();
+
+console.log("SERVER STARTING...");
+console.log("ENV CHECK - Gemini Key:", process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY ? "LOADED" : "MISSING");
+
 // Safely handle missing key for local dev startup (will fail on request if missing)
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 
 app.get('/', (req, res) => res.send('API is Online'));
+app.get('/api/test', (req, res) => {
+  res.json({ message: "Backend is reachable!", time: new Date() });
+});
 
 // Middleware
 app.use(cors({
