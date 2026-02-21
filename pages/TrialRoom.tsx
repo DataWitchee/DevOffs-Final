@@ -47,6 +47,17 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
   const [isCompiling, setIsCompiling] = useState(false);
   const [consoleOutput, setConsoleOutput] = useState<{ stdout: string, time: number, memory: number, complexity?: string } | null>(null);
 
+  const getLanguageBoilerplate = (lang: string, fallbackJS: string) => {
+    switch (lang) {
+      case 'python': return `def solution(args):\n    # Your Python 3 code here\n    pass`;
+      case 'cpp': return `#include <iostream>\nusing namespace std;\n\nvoid solution() {\n    // Your C++ code here\n}`;
+      case 'java': return `class Solution {\n    public static void main(String[] args) {\n        // Your Java code here\n    }\n}`;
+      case 'plaintext': return `// Write your Pseudo Code or Logic Outline here...`;
+      case 'javascript':
+      default: return fallbackJS || `function solution(args) {\n  // Your JS code here\n}`;
+    }
+  };
+
   const handleRunTests = async () => {
     setIsCompiling(true);
     setConsoleOutput(null);
@@ -54,7 +65,7 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
 
     try {
       const { data } = await axios.post(`${API_BASE_URL}/api/execute`, {
-        code: answers[currentQ?.id] || currentQ?.starterCode || "",
+        code: answers[`${currentQ?.id}_${language}`] || getLanguageBoilerplate(language, currentQ?.starterCode || ""),
         language: language
       });
 
@@ -112,6 +123,13 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [hasPermissions, setHasPermissions] = useState(false);
   const blurTimeRef = useRef<number | null>(null);
+
+  const setVideoRef = useCallback((node: HTMLVideoElement | null) => {
+    if (node) {
+      if (stream) node.srcObject = stream;
+      (videoRef as any).current = node;
+    }
+  }, [stream]);
 
   // New ML Proctor Hook
   const proctor = useProctoring(videoRef, {
@@ -201,11 +219,7 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
     }));
   };
 
-  useEffect(() => {
-    if (stream && videoRef.current) {
-      videoRef.current.srcObject = stream;
-    }
-  }, [stream, session.status]);
+  // Removed unstable generic useEffect in favor of precise setVideoRef callback
 
   useEffect(() => {
     if (session.status !== 'active') return;
@@ -253,7 +267,7 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
     setSession(prev => ({ ...prev, status: 'analyzing', endTime: Date.now() }));
 
     const taskSummary = questions.map(q => `[${q.category}] Q${q.id}: ${q.text}`).join("\n");
-    const solutionSummary = questions.map(q => `A${q.id}: ${answers[q.id] || "(No Answer)"}`).join("\n");
+    const solutionSummary = questions.map(q => `A${q.id} (${language}): ${answers[`${q.id}_${language}`] || "(No Answer)"}`).join("\n");
 
     const result = await evaluatePerformance(
       domain,
@@ -292,7 +306,7 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
   }, [session.status, handleSubmit]);
 
   const handleAnswerChange = (text: string) => {
-    setAnswers(prev => ({ ...prev, [questions[currentQuestionIdx].id]: text }));
+    setAnswers(prev => ({ ...prev, [`${questions[currentQuestionIdx].id}_${language}`]: text }));
   };
 
   const handleNext = () => {
@@ -335,7 +349,7 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
           <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
             <h3 className="text-lg font-bold text-white mb-4">AI Vision Feed</h3>
             <div className="aspect-video bg-black rounded-xl overflow-hidden relative border border-slate-700 shadow-2xl">
-              <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover transform scale-x-[-1]" />
+              <video ref={setVideoRef} autoPlay muted playsInline className="w-full h-full object-cover transform scale-x-[-1]" />
               {!hasPermissions && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/90 backdrop-blur-md">
                   <VideoOff size={32} className="text-slate-600 mb-2" />
@@ -542,7 +556,7 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
           {/* PIP PROCTOR */}
           <div className="p-4 bg-slate-900/80 border-t border-slate-700 flex items-center gap-4">
             <div className="w-24 aspect-video bg-black rounded-lg overflow-hidden border border-slate-700 relative">
-              <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover transform scale-x-[-1]" />
+              <video ref={setVideoRef} autoPlay muted playsInline className="w-full h-full object-cover transform scale-x-[-1]" />
               <div className="absolute top-1 left-1 bg-red-600 w-1.5 h-1.5 rounded-full animate-pulse"></div>
             </div>
             <div className="flex-1">
@@ -583,7 +597,7 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
               height="100%"
               language={language === 'plaintext' ? 'javascript' : language}
               theme="vs-dark"
-              value={answers[currentQ?.id] || currentQ?.starterCode || ""}
+              value={answers[`${currentQ?.id}_${language}`] !== undefined ? answers[`${currentQ?.id}_${language}`] : getLanguageBoilerplate(language, currentQ?.starterCode || "")}
               onChange={(val) => handleAnswerChange(val || '')}
               options={{
                 minimap: { enabled: false },

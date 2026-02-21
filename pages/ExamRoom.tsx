@@ -44,6 +44,13 @@ export const ExamRoom: React.FC<Props> = ({ user, onUpdateUser }) => {
    const [stream, setStream] = useState<MediaStream | null>(null);
    const [violations, setViolations] = useState<string[]>([]);
    const [hasPermissions, setHasPermissions] = useState(false);
+
+   const setVideoRef = React.useCallback((node: HTMLVideoElement | null) => {
+      if (node) {
+         if (stream) node.srcObject = stream;
+         (videoRef as any).current = node;
+      }
+   }, [stream]);
    const lastViolationRef = useRef<number>(0);
 
    // Live ML Proctor
@@ -110,9 +117,7 @@ export const ExamRoom: React.FC<Props> = ({ user, onUpdateUser }) => {
       }
    };
 
-   useEffect(() => {
-      if (stream && videoRef.current) videoRef.current.srcObject = stream;
-   }, [stream, status]);
+   // Removed fragile generic useEffect in favor of precise setVideoRef callback
 
    useEffect(() => {
       if (!['mcq', 'theory', 'practical'].includes(status)) return;
@@ -273,7 +278,7 @@ export const ExamRoom: React.FC<Props> = ({ user, onUpdateUser }) => {
 
                <div className="flex flex-col gap-6">
                   <div className="aspect-video bg-black rounded-2xl overflow-hidden relative border-2 border-slate-700 shadow-2xl">
-                     <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover transform scale-x-[-1]" />
+                     <video ref={setVideoRef} autoPlay muted playsInline className="w-full h-full object-cover transform scale-x-[-1]" />
                      {!hasPermissions && (
                         <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/90 backdrop-blur-md">
                            <Video size={32} className="text-slate-600 mb-2" />
@@ -395,7 +400,7 @@ export const ExamRoom: React.FC<Props> = ({ user, onUpdateUser }) => {
             </div>
             <div className="w-80 bg-slate-900 border-l border-slate-800 flex flex-col">
                <div className="aspect-video relative bg-black shadow-inner">
-                  <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover transform scale-x-[-1]" />
+                  <video ref={setVideoRef} autoPlay muted playsInline className="w-full h-full object-cover transform scale-x-[-1]" />
                   <div className="absolute top-2 left-2 flex gap-1 items-center bg-black/40 px-2 py-0.5 rounded-full border border-white/10">
                      <div className="w-1 h-1 bg-red-600 rounded-full animate-pulse"></div>
                      <span className="text-[8px] text-white font-black uppercase tracking-tighter">Secure Link</span>
