@@ -316,8 +316,8 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-6">
         <Loader2 size={64} className="text-cyan-500 animate-spin" />
-        <h2 className="text-2xl font-bold text-white">Generating Competitive 10-Question Trial...</h2>
-        <p className="text-slate-400 max-w-md">Our AI is constructing 5 practical and 5 conceptual senior-level scenarios for {domain}.</p>
+        <h2 className="text-2xl font-bold text-white mb-2">Gemini AI is analyzing your skill DNA...</h2>
+        <p className="text-slate-400 max-w-md">Synthesizing custom {domain} challenge...</p>
       </div>
     );
   }

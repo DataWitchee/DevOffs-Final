@@ -125,7 +125,13 @@ const BACKUP_QUESTION = {
 
 export const generateSkillTrial = async (domain: SkillDomain): Promise<{ questions: { id: number, text: string, category: 'Practical' | 'Concept' }[], constraints: string[] }> => {
     const ai = getAiClient();
-    const prompt = `Generate a highly competitive senior-level technical trial for ${domain}.
+
+    let promptDomain = domain as string;
+    if (promptDomain.toLowerCase().includes('machine learning') || promptDomain === 'ML') {
+        promptDomain += " (Specifically focus on Tensor transformations or Backpropagation calculus for deep technical depth)";
+    }
+
+    const prompt = `Generate a highly competitive senior-level technical trial for ${promptDomain}.
     The trial must consist of exactly 10 questions:
     - 5 Practical Questions: Focus on implementation details, edge cases, and real-world system design scenarios.
     - 5 Concept Questions: Focus on deep theoretical understanding, internals, and architectural trade-offs.
@@ -162,19 +168,13 @@ export const generateSkillTrial = async (domain: SkillDomain): Promise<{ questio
         }
     }));
 
-    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
+    const timeout = new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000));
 
-    try {
-        const response = await Promise.race([apiCall, timeout]);
-        if (!response) {
-            console.warn("API Timeout (5s) hit. Returning BACKUP_QUESTION.");
-            return BACKUP_QUESTION;
-        }
-        return parseResponse(response.text);
-    } catch (e) {
-        console.error("API Error hit. Returning BACKUP_QUESTION.");
-        return BACKUP_QUESTION;
+    const response = await Promise.race([apiCall, timeout]);
+    if (!response) {
+        throw new Error("API Timeout");
     }
+    return parseResponse(response.text);
 };
 
 export const evaluatePerformance = async (

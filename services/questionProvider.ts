@@ -228,17 +228,26 @@ export class QuestionService {
 
     async getQuestions(request: QuestionRequest): Promise<QuestionResponse[]> {
         const timeoutError = new Error("Provider Timeout");
+        const timeoutMs = 3000; // Strict 3-second timeout for Gemini
         const timeout = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(timeoutError), 60000)
+            setTimeout(() => reject(timeoutError), timeoutMs)
         );
 
+        // ML-Specific Generation
+        const isML = request.topic.toLowerCase().includes('machine learning') || request.topic === 'ML' || request.topic === 'Machine Learning';
+        const modifiedRequest = { ...request };
+        if (isML) {
+             modifiedRequest.topic = request.topic + " (Specifically focus on Tensor transformations or Backpropagation calculus for deep technical depth)";
+        }
+
         try {
+            // Attempt Gemini API first if configured
             return await Promise.race([
-                this.provider.generateQuestions(request),
+                this.provider.generateQuestions(modifiedRequest),
                 timeout
             ]);
         } catch (e) {
-            console.warn("Primary provider failed or timed out (60s). Falling back to LOCAL provider as a safety net.");
+            console.warn(`Primary provider failed or timed out (${timeoutMs}ms). Silently falling back to 900-question LOCAL_QUESTIONS bank.`);
             // Fallback strategy to guarantee zero-error UX
             const fallbackProvider = new LocalProvider();
             return await fallbackProvider.generateQuestions(request);
