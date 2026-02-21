@@ -415,11 +415,12 @@ export const Dashboard: React.FC<Props> = ({ user, onStartTrial }) => {
               <span className="block mt-1 text-xs text-slate-500 font-mono">*Camera & Mic Required</span>
             </p>
 
+            {/* Bypass any limits for the demo */}
             <button
               onClick={handleStartInterviewClick}
-              className={`w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl border border-slate-600 hover:border-cyan-500/50 transition-all flex items-center justify-center gap-2 ${!canStartInterview ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl border border-slate-600 hover:border-cyan-500/50 transition-all flex items-center justify-center gap-2`}
             >
-              {canStartInterview ? 'Start Interview' : 'Limit Reached'} <Mic size={16} />
+              Start Interview <Mic size={16} />
             </button>
           </div>
 
@@ -428,16 +429,20 @@ export const Dashboard: React.FC<Props> = ({ user, onStartTrial }) => {
             <h2 className="text-xl font-bold text-white mb-4">Start New Trial</h2>
 
             <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-              {Object.values(SkillDomain).map((domain) => (
-                <button
-                  key={domain}
-                  onClick={() => handleStartTrialClick(domain)}
-                  className={`w-full flex items-center justify-between p-4 rounded-xl bg-slate-700 hover:bg-cyan-900/30 hover:border-cyan-500 border border-transparent transition-all group shrink-0 ${!canStartTrial ? 'opacity-50' : ''}`}
-                >
-                  <span className="text-slate-200 font-medium text-left group-hover:text-cyan-400">{domain}</span>
-                  <Play size={18} className="text-slate-500 group-hover:text-cyan-400 shrink-0" />
-                </button>
-              ))}
+              {Object.values(SkillDomain)
+                .filter(domain => ['DSA', 'Machine Learning', 'Frontend', 'Backend'].includes(domain))
+                .map((domain) => (
+                  <button
+                    key={domain}
+                    onClick={() => handleStartTrialClick(domain)}
+                    className="w-full flex items-center justify-between p-3 bg-slate-800 border border-slate-700 hover:border-cyan-500 rounded-xl group transition-all"
+                  >
+                    <span className="font-bold text-slate-300 group-hover:text-cyan-400 transition-colors">
+                      {domain}
+                    </span>
+                    <Play size={16} className="text-slate-500 group-hover:text-cyan-400 group-hover:translate-x-1 transition-all" />
+                  </button>
+                ))}
             </div>
           </div>
 
