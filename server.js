@@ -14,6 +14,8 @@ const app = express();
 // Safely handle missing key for local dev startup (will fail on request if missing)
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 
+app.get('/', (req, res) => res.send('API is Online'));
+
 // Middleware
 app.use(cors({
   origin: '*',
@@ -163,6 +165,7 @@ app.use('/api/debug', debugRouter);
 
 // Pure Gemini Question Route (Fast, Guaranteed Output)
 app.get('/api/question/random', async (req, res) => {
+  console.log("Gemini Key exists:", !!process.env.GEMINI_API_KEY || !!process.env.VITE_GEMINI_API_KEY);
   try {
     const questionData = await geminiService.generateQuestion();
     res.json(questionData);

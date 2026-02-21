@@ -135,13 +135,8 @@ export const Dashboard: React.FC<Props> = ({ user, onStartTrial }) => {
   };
 
   const handleStartTrialClick = (domain: SkillDomain) => {
-    if (canStartTrial) {
-      setSelectedDomain(domain);
-      setShowModeSelect(true);
-    } else {
-      alert("You have reached your monthly limit of 5 free Skill Trials. Please upgrade to Pro for unlimited access.");
-      navigate('/pricing');
-    }
+    setSelectedDomain(domain);
+    setShowModeSelect(true);
   };
 
   const handleModeSelect = async (mode: 'practice' | 'ranked') => {
@@ -156,12 +151,7 @@ export const Dashboard: React.FC<Props> = ({ user, onStartTrial }) => {
   };
 
   const handleStartInterviewClick = () => {
-    if (canStartInterview) {
-      navigate('/interview');
-    } else {
-      alert("You have reached your monthly limit of 5 free AI Interviews. Please upgrade to Pro for unlimited access.");
-      navigate('/pricing');
-    }
+    navigate('/interview');
   };
 
   if (isLoading) {
