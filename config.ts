@@ -1,4 +1,3 @@
 // config.ts
-export const API_BASE_URL = (import.meta as any).env?.PROD
-    ? 'https://devoffs-api.onrender.com'
-    : 'http://localhost:3000';
+export const API_BASE_URL = 'https://devoffs-api.onrender.com';
+// : 'http://localhost:3000';
