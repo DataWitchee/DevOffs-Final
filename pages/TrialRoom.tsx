@@ -187,10 +187,15 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
     enabled: session.status === 'active',
     gazeThresholdMs: 3000,
     onWarning: (warning) => {
-      setAntiCheat(prev => ({
-        ...prev,
-        environmentViolations: [...(prev.environmentViolations || []), warning.message]
-      }));
+      // Only flag hard violations (no face / multiple faces) as integrity issues
+      // Soft gaze/confusion warnings are logged only, NOT used to block submission
+      const isHardViolation = warning.type === 'NO_FACE' || warning.type === 'MULTIPLE_FACES';
+      if (isHardViolation) {
+        setAntiCheat(prev => ({
+          ...prev,
+          environmentViolations: [...(prev.environmentViolations || []), warning.message]
+        }));
+      }
     }
   });
 
@@ -293,7 +298,7 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
     if (antiCheat.pasteCount > MAX_PASTES) violations.push(`Clipboard misuse detected.`);
     if (antiCheat.tabSwitchCount > MAX_TAB_SWITCHES) violations.push(`Excessive window switching.`);
     if (antiCheat.focusLostTime > MAX_FOCUS_LOST_TIME) violations.push(`Extended absence.`);
-    if (antiCheat.environmentViolations && antiCheat.environmentViolations.length > 2) violations.push(`Persistent environment security violations.`);
+    if (antiCheat.environmentViolations && antiCheat.environmentViolations.length > 5) violations.push(`Persistent environment security violations.`);
 
     if (violations.length > 0) {
       setSession(prev => ({
