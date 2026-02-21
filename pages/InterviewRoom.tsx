@@ -224,8 +224,11 @@ export const InterviewRoom: React.FC<Props> = ({ onComplete }) => {
     const spokenText = mockQuestion.questionText.replace(/`/g, "").replace(/\*\*/g, "").replace(/\n/g, " ");
 
     setCurrentQuestionText(spokenText);
-    setMaxTime(60); // 60s per answer for demo
-    setTimeLeft(60);
+
+    // Dynamic Time Calculation: 1 second per 5 characters, minimum 60 seconds
+    const dynamicTime = Math.max(60, Math.floor(spokenText.length / 5));
+    setMaxTime(dynamicTime);
+    setTimeLeft(dynamicTime);
 
     setStatus('active');
     setAiState('speaking_question');
@@ -472,6 +475,16 @@ export const InterviewRoom: React.FC<Props> = ({ onComplete }) => {
                 <p className="text-slate-400 text-sm max-w-xs mx-auto italic">
                   {aiState === 'listening' ? "Speak clearly and concisely. Time is remaining." : "Wait for the AI to finish its turn."}
                 </p>
+
+                {/* Visual Subtitles for the Offline Fallback questions */}
+                {currentQuestionText && (
+                  <div className="mt-8 bg-slate-900/80 p-6 rounded-2xl border border-slate-700 shadow-inner text-left animate-fade-in max-w-md mx-auto">
+                    <p className="text-slate-300 font-medium text-sm leading-relaxed whitespace-pre-wrap">
+                      {currentQuestionText}
+                    </p>
+                  </div>
+                )}
+
               </div>
             </div>
           </div>
