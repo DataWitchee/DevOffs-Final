@@ -76,15 +76,30 @@ const FALLBACK_QUESTION = {
   }
 };
 
-// Pure Gemini Generation Endpoint
-app.get('/api/question/random', async (req, res) => {
+// Pure Gemini Generation Endpoint (The Controller)
+app.post('/api/question/random', async (req, res) => {
   try {
-    // Uses the new GeminiService we built
-    const questionData = await geminiService.generateQuestion();
-    res.json(questionData);
+    const { difficulty, topic } = req.body;
+
+    // Uses the new bulletproof GeminiService
+    const questionData = await geminiService.generateQuestion(difficulty, topic);
+    res.status(200).json(questionData);
+
   } catch (error) {
     console.error('Critical Error fetching gemini question:', error);
     // Silent fail-safe
+    res.status(200).json(FALLBACK_QUESTION);
+  }
+});
+
+// Support GET for backwards compatibility with the previous demo version
+app.get('/api/question/random', async (req, res) => {
+  try {
+    const { difficulty, topic } = req.query;
+    const questionData = await geminiService.generateQuestion(difficulty, topic);
+    res.status(200).json(questionData);
+  } catch (error) {
+    console.error('Critical Error fetching gemini question:', error);
     res.status(200).json(FALLBACK_QUESTION);
   }
 });
