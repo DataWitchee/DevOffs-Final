@@ -60,7 +60,7 @@ const NavBar: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLogout
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 text-white font-bold text-xl tracking-tight">
             <Hexagon className="text-cyan-500 fill-cyan-500/20" size={28} />
-            <span>DevOff</span>
+            <span>DevOffs</span>
           </Link>
         </div>
       </nav>
@@ -73,7 +73,7 @@ const NavBar: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLogout
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 text-white font-bold text-xl tracking-tight opacity-50">
             <Hexagon className="text-slate-500" size={28} />
-            <span>DevOff <span className="text-slate-600 font-normal">| Setup</span></span>
+            <span>DevOffs <span className="text-slate-600 font-normal">| Setup</span></span>
           </div>
         </div>
       </nav>
@@ -85,7 +85,7 @@ const NavBar: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLogout
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2 text-white font-bold text-xl tracking-tight">
           <Hexagon className="text-cyan-500 fill-cyan-500/20" size={28} />
-          <span>DevOff <span className="text-slate-500 font-normal hidden sm:inline">| Verify Your Skill DNA</span></span>
+          <span>DevOffs <span className="text-slate-500 font-normal hidden sm:inline">| Verify Your Skill DNA</span></span>
         </Link>
 
         {/* Desktop Nav */}
@@ -372,7 +372,7 @@ export default function App() {
         </main>
 
         <footer className="border-t border-slate-800 mt-12 py-8 text-center text-slate-500 text-sm">
-          <p>© 2024 DevOff. All rights reserved.</p>
+          <p>© 2026 DevOffs. All rights reserved.</p>
           <p className="mt-2">Reinventing hiring with <span className="text-cyan-600">AI-Verified</span> credentials.</p>
         </footer>
       </div>

@@ -16,7 +16,7 @@ const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SEC
 
 // Middleware
 app.use(cors({
-  origin: ["https://devoffs.vercel.app", "http://localhost:5173"],
+  origin: '*',
   credentials: true
 }));
 
