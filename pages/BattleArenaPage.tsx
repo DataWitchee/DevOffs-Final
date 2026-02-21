@@ -22,12 +22,24 @@ export const BattleArenaPage: React.FC = () => {
   const [userProgress, setUserProgress] = useState(0);
   const [timeLeft, setTimeLeft] = useState(300); // 5 minutes
 
-  // Initialize the Ghost Opponent
-  // Speed: ~15 characters per second
-  const { ghostCode, progress: ghostProgress } = useGhostOpponent({
-    targetCode: TARGET_CODE,
-    speed: 15
-  });
+  // MOCK SOCKET: Simulate opponent progress every 5 seconds
+  const [ghostProgress, setGhostProgress] = useState(0);
+
+  useEffect(() => {
+    const mockSocket = setInterval(() => {
+      setGhostProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(mockSocket);
+          return 100;
+        }
+        const jump = Math.floor(Math.random() * 15) + 5; // 5% to 20% jump
+        return Math.min(100, prev + jump);
+      });
+    }, 5000);
+    return () => clearInterval(mockSocket);
+  }, []);
+
+  const ghostCode = TARGET_CODE.substring(0, Math.floor((ghostProgress / 100) * TARGET_CODE.length));
 
   // Calculate User Progress (Mock logic: just based on code length relative to target)
   useEffect(() => {

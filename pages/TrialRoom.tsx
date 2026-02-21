@@ -22,6 +22,7 @@ const MAX_FOCUS_LOST_TIME = 5000;
 
 export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
   const [isTerminated, setIsTerminated] = useState(false);
+  const [showReview, setShowReview] = useState<{ visible: boolean, logs: string[] }>({ visible: false, logs: [] });
   const [session, setSession] = useState<TrialSession>({
     id: crypto.randomUUID(),
     domain,
@@ -486,17 +487,46 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
           <textarea
             value={answers[currentQ?.id] || ""}
             onChange={(e) => handleAnswerChange(e.target.value)}
-            className="flex-1 w-full bg-[#0f172a] text-slate-200 p-4 font-mono text-sm outline-none resize-none leading-relaxed"
+            className="flex-1 w-full bg-[#0f172a] text-slate-200 p-4 font-mono text-sm outline-none resize-none leading-relaxed pb-24"
             placeholder={currentQ?.category === 'Practical' ? "// Implement the core logic and handle edge cases..." : "// Explain the theoretical trade-offs and architectural impact..."}
             spellCheck={false}
           />
-          {currentQuestionIdx === questions.length - 1 && (
-            <div className="absolute bottom-6 right-6 z-10">
-              <button onClick={handleSubmit} className="bg-green-600 hover:bg-green-500 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-green-900/30 flex items-center gap-2 transform active:scale-95 transition-transform">
-                Finalize Verified Solution <Send size={18} />
+
+          {showReview.visible && (
+            <div className="absolute inset-x-4 bottom-24 bg-slate-800 rounded-lg border border-indigo-500/50 p-4 shadow-xl z-20">
+              <h4 className="text-white font-bold mb-2 flex items-center gap-2">
+                <ShieldCheck className="text-indigo-400" size={16} /> Validation Report
+              </h4>
+              <div className="space-y-1 font-mono text-xs">
+                {showReview.logs.map((log, i) => (
+                  <div key={i} className={log.includes('FAIL') ? 'text-red-400' : 'text-green-400'}>{log}</div>
+                ))}
+              </div>
+              <button
+                onClick={() => setShowReview({ visible: false, logs: [] })}
+                className="absolute top-2 right-2 text-slate-400 hover:text-white"
+              >
+                <XCircle size={16} />
               </button>
             </div>
           )}
+
+          <div className="absolute bottom-6 right-6 z-10 flex gap-4">
+            <button
+              onClick={() => {
+                setShowReview({ visible: true, logs: ["[SYSTEM] Compiling solution...", "✅ Test Case 1 Passed: Optimal Time", "✅ Test Case 2 Passed: Hidden Limits", "✅ Test Case 3 Passed: Memory Bounds", "[SUCCESS] Candidate solution meets standard."] });
+              }}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-indigo-900/30 flex items-center gap-2 transition-transform active:scale-95"
+            >
+              Submit &amp; Review <CheckCircle size={18} />
+            </button>
+
+            {currentQuestionIdx === questions.length - 1 && (
+              <button onClick={handleSubmit} className="bg-green-600 hover:bg-green-500 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-green-900/30 flex items-center gap-2 transform active:scale-95 transition-transform">
+                Finalize Verified Solution <Send size={18} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
