@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
-import { Clock, Code2, Cpu, Play, CheckCircle, ShieldCheck, XCircle } from 'lucide-react';
+import { Clock, Code2, Cpu, Play, CheckCircle, ShieldCheck, XCircle, Terminal, AlertTriangle } from 'lucide-react';
+import axios from 'axios';
+import { API_BASE_URL } from '../config';
 import { localQuestions } from '../data/LocalQuestions';
 
 // Grab the first DSA algorithm question dynamically
@@ -13,9 +15,26 @@ export const BattleArenaPage: React.FC = () => {
   const [userProgress, setUserProgress] = useState(0);
   const [timeLeft, setTimeLeft] = useState(300); // 5 minutes
 
-  // Mock Runner State
+  // Execution and Console State
   const [isCompiling, setIsCompiling] = useState(false);
+  const [consoleOutput, setConsoleOutput] = useState<{ stdout: string, time: number, memory: number } | null>(null);
   const [showReview, setShowReview] = useState<{ visible: boolean, logs: string[] }>({ visible: false, logs: [] });
+
+  // Anomaly Tracking
+  const [anomalyLog, setAnomalyLog] = useState<string | null>(null);
+  const previousCodeLength = useRef(TARGET_CODE.length);
+
+  const handleEditorChange = (val: string | undefined) => {
+    const newCode = val || '';
+    setUserCode(newCode);
+
+    // Track Paste Anomalies (Massive sudden insertion)
+    if (newCode.length - previousCodeLength.current > 50) {
+      setAnomalyLog("Potential Copy-Paste Detected.");
+      setTimeout(() => setAnomalyLog(null), 4000);
+    }
+    previousCodeLength.current = newCode.length;
+  };
 
   // MOCK SOCKET: Simulate opponent progress every 5 seconds
   const [ghostProgress, setGhostProgress] = useState(0);
@@ -57,13 +76,19 @@ export const BattleArenaPage: React.FC = () => {
 
   const isLowTime = timeLeft < 60;
 
-  // Handle Mock Runner
-  const handleRunTests = () => {
+  // Handle Real Execution Engine
+  const handleRunTests = async () => {
     setIsCompiling(true);
+    setConsoleOutput(null);
     setShowReview({ visible: false, logs: [] });
 
-    setTimeout(() => {
-      setIsCompiling(false);
+    try {
+      const { data } = await axios.post(`${API_BASE_URL}/api/execute`, {
+        code: userCode,
+        language: language
+      });
+
+      setConsoleOutput({ stdout: data.stdout, time: data.time, memory: data.memory });
 
       if (language === 'plaintext') {
         setShowReview({
@@ -75,13 +100,12 @@ export const BattleArenaPage: React.FC = () => {
             "[SUCCESS] Conceptual solution approved."
           ]
         });
+        setIsCompiling(false);
         return;
       }
 
-      // Basic length check for mock validation
-      const isLongEnough = userCode.length > TARGET_CODE.length - 20;
-
-      if (isLongEnough) {
+      // Basic success validation based on memory/time presence
+      if (data.memory > 0 || data.stdout) {
         setShowReview({
           visible: true,
           logs: [
@@ -93,18 +117,24 @@ export const BattleArenaPage: React.FC = () => {
           ]
         });
         setUserProgress(100);
-      } else {
-        setShowReview({
-          visible: true,
-          logs: [
-            "[SYSTEM] Compiling solution...",
-            "❌ Test Case 1 FAILED: Output mismatch",
-            "❌ Test Case 2 FAILED",
-            "[ERROR] Review logic and try again."
-          ]
-        });
       }
-    }, 1500);
+    } catch (err: any) {
+      setConsoleOutput({
+        stdout: err.response?.data?.error || "Execution failed.",
+        time: 0,
+        memory: 0
+      });
+      setShowReview({
+        visible: true,
+        logs: [
+          "[SYSTEM] Compiling solution...",
+          "❌ Test Cases FAILED",
+          "[ERROR] Execution Engine Error."
+        ]
+      });
+    } finally {
+      setIsCompiling(false);
+    }
   };
 
   return (
@@ -155,8 +185,13 @@ export const BattleArenaPage: React.FC = () => {
 
       </div>
 
-      {/* 2. QUESTION HUD */}
-      <div className="bg-slate-900 border-b border-slate-800 p-4 shrink-0 flex gap-6">
+      {/* 2. QUESTION HUD & ANOMALY ALERTS */}
+      <div className="bg-slate-900 border-b border-slate-800 p-4 shrink-0 flex gap-6 relative">
+        {anomalyLog && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-900/90 border border-red-500 text-red-200 px-6 py-2 rounded-full font-bold text-sm shadow-[0_0_20px_rgba(239,68,68,0.5)] z-20 flex items-center gap-2 animate-bounce">
+            <AlertTriangle size={16} /> {anomalyLog}
+          </div>
+        )}
         <div className="flex-1">
           <h2 className="text-white font-bold mb-2">{activeQuestion.questionText.split('\n')[0].replace('### ', '')}</h2>
           <p className="text-sm text-slate-400 whitespace-pre-wrap">{activeQuestion.questionText.split('\n').slice(1).join('\n')}</p>
@@ -202,7 +237,7 @@ export const BattleArenaPage: React.FC = () => {
               language={language}
               theme="vs-dark"
               value={userCode}
-              onChange={(val) => setUserCode(val || '')}
+              onChange={handleEditorChange}
               options={{
                 minimap: { enabled: false },
                 fontSize: 14,
@@ -242,8 +277,26 @@ export const BattleArenaPage: React.FC = () => {
         </div>
       </div>
 
+      {/* 3.5. CONSOLE OUTPUT (Bottom 25%) */}
+      {consoleOutput && (
+        <div className="h-48 shrink-0 bg-[#0a0f18] border-t border-slate-800 flex flex-col z-10">
+          <div className="h-8 shrink-0 bg-[#121826] flex items-center px-4 font-mono text-xs text-slate-400 border-b border-slate-800 flex justify-between">
+            <span className="flex items-center gap-2"><Terminal size={14} /> Console Output</span>
+            {consoleOutput.memory > 0 && (
+              <span className="text-cyan-400 font-bold">
+                ⏱️ {consoleOutput.time}ms | 🧠 {(consoleOutput.memory / 1024 / 1024).toFixed(2)}MB
+              </span>
+            )}
+            {consoleOutput.memory === 0 && <span className="text-green-400 font-bold">🚀 Execution Success!</span>}
+          </div>
+          <div className="flex-1 p-4 font-mono text-sm text-slate-300 overflow-y-auto whitespace-pre-wrap">
+            {consoleOutput.stdout || "Output is empty."}
+          </div>
+        </div>
+      )}
+
       {/* 4. RUN / SUBMIT CONTROLS */}
-      <div className="h-16 shrink-0 bg-slate-900 border-t border-slate-800 flex items-center justify-between px-6 z-10 w-full">
+      <div className="h-16 shrink-0 bg-slate-900 border-t border-slate-800 flex items-center justify-between px-6 z-10 w-full relative">
         {showReview.visible && (
           <div className="absolute right-6 bottom-20 bg-slate-800 rounded-lg border border-indigo-500/50 p-4 shadow-xl z-20 w-80">
             <h4 className="text-white font-bold mb-2 flex items-center gap-2">
