@@ -217,6 +217,92 @@ export const evaluatePerformance = async (
     return parseResponse(response.text);
 };
 
+// --- ADAPTIVE ENDLESS ARENA GENERATION ---
+
+export const generateAdaptiveQuestion = async (
+    domain: SkillDomain,
+    lastScore: number,
+    iteration: number
+): Promise<{ id: string, text: string, category: string, starterCode: string, constraints: string[] }> => {
+    const ai = getAiClient();
+
+    // Scale difficulty based on performance. Below 60 means they struggled, above 80 means they excelled.
+    let difficultyMarker = "Intermediate";
+    if (iteration === 1) difficultyMarker = "Intermediate";
+    else if (lastScore > 85) difficultyMarker = "Expert";
+    else if (lastScore > 70) difficultyMarker = "Advanced";
+    else if (lastScore < 50) difficultyMarker = "Beginner";
+
+    const prompt = `Generate a single ${difficultyMarker} level coding challenge for ${domain}.
+    The user scored ${lastScore}% on their previous attempt. Adjust the complexity accordingly.
+    Output MUST be a JSON object containing: text (the problem statement), category (Practical/Concept), starterCode (function signature in JS), constraints (array of strings).`;
+
+    const apiCall = withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: FAST_MODEL,
+        contents: prompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    text: { type: Type.STRING },
+                    category: { type: Type.STRING },
+                    starterCode: { type: Type.STRING },
+                    constraints: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING }
+                    }
+                },
+                required: ["text", "category", "starterCode", "constraints"]
+            }
+        }
+    }));
+
+    const timeout = new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 4000));
+    const response = await Promise.race([apiCall, timeout]);
+    if (!response) throw new Error("API Timeout");
+
+    const data = parseResponse(response.text);
+    return {
+        id: `ADAPTIVE-${Date.now()}`,
+        ...data
+    };
+};
+
+export const evaluateCodeSubmission = async (
+    domain: SkillDomain,
+    questionText: string,
+    userCode: string,
+    language: string
+): Promise<{ score: number, feedback: string, analysis: string }> => {
+    const ai = getAiClient();
+    const prompt = `You are a strict technical judge. Evaluate the following ${language} code for ${domain}.
+    Problem: ${questionText}
+    User Code:
+    ${userCode}
+    
+    Analyze for correctness, time/space complexity, and edge cases. Provide a score out of 100.
+    Output JSON.`;
+
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: FAST_MODEL,
+        contents: prompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    score: { type: Type.NUMBER },
+                    feedback: { type: Type.STRING },
+                    analysis: { type: Type.STRING }
+                },
+                required: ["score", "feedback", "analysis"]
+            }
+        }
+    }));
+    return parseResponse(response.text);
+};
+
 // --- COMPETITIVE EXAM GENERATION (OPTIMIZED FOR SPEED) ---
 
 export const generateExamMCQs = async (domain: SkillDomain): Promise<ExamMCQ[]> => {

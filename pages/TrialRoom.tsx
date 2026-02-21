@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { TrialSession, SkillDomain, AntiCheatLog } from '../types';
-import { generateSkillTrial, evaluatePerformance, analyzeEnvironmentSnapshot } from '../services/gemini';
+import { generateSkillTrial, evaluatePerformance, analyzeEnvironmentSnapshot, generateAdaptiveQuestion, evaluateCodeSubmission } from '../services/gemini';
 import { AlertTriangle, Clock, Eye, Send, Code, Cpu, ShieldAlert, XCircle, CheckCircle, ChevronRight, ChevronLeft, Lock, Loader2, Video, VideoOff, RotateCw, ShieldCheck, Sun, User as UserIcon, Smartphone, Terminal, Play } from 'lucide-react';
 import { SkillRadar } from '../components/SkillRadar';
 import { useProctoring, WarningType } from '../hooks/useProctoring';
@@ -37,6 +37,12 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
   const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
 
+  // Adaptive State
+  const [iteration, setIteration] = useState(1);
+  const [cumulativeScore, setCumulativeScore] = useState(0);
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  const [adaptiveFeedback, setAdaptiveFeedback] = useState<string | null>(null);
+
   const [antiCheat, setAntiCheat] = useState<AntiCheatLog>({
     tabSwitchCount: 0,
     pasteCount: 0,
@@ -46,6 +52,8 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
   const [language, setLanguage] = useState<'javascript' | 'python' | 'cpp' | 'java' | 'plaintext'>('javascript');
   const [isCompiling, setIsCompiling] = useState(false);
   const [consoleOutput, setConsoleOutput] = useState<{ stdout: string, time: number, memory: number, complexity?: string } | null>(null);
+
+  const currentQ = questions[currentQuestionIdx];
 
   const getLanguageBoilerplate = (lang: string, fallbackJS: string) => {
     switch (lang) {
@@ -146,25 +154,16 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
   useEffect(() => {
     const init = async () => {
       try {
-        // Attempt to hit the Generative AI Endpoint
-        const data = await generateSkillTrial(domain);
-        if (!data || data.questions.length === 0) throw new Error("Empty AI Response");
+        setSession(prev => ({ ...prev, status: 'generating' }));
+        const data = await generateAdaptiveQuestion(domain, cumulativeScore, iteration);
 
-        const aiQuestions = data.questions.map((q: any) => ({
-          id: `AI-GEN-${q.id}`,
-          category: q.category === 'Concept' ? 'Theoretical' : 'Practical',
-          text: q.text,
-          type: "coding",
-          starterCode: "// Implement the AI generated prompt here...",
-          testCases: [],
-          constraints: data.constraints || []
-        }));
+        setQuestions([data as any]);
+        setCurrentQuestionIdx(0);
 
-        setQuestions(aiQuestions as any);
         setSession(prev => ({
           ...prev,
           status: 'setup',
-          taskDescription: JSON.stringify(aiQuestions),
+          taskDescription: data.text,
           constraints: data.constraints || []
         }));
 
@@ -264,28 +263,31 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
       return;
     }
 
-    setSession(prev => ({ ...prev, status: 'analyzing', endTime: Date.now() }));
+    setIsEvaluating(true);
+    setAdaptiveFeedback(null);
 
-    const taskSummary = questions.map(q => `[${q.category}] Q${q.id}: ${q.text}`).join("\n");
-    const solutionSummary = questions.map(q => `A${q.id} (${language}): ${answers[`${q.id}_${language}`] || "(No Answer)"}`).join("\n");
+    try {
+      const userCode = answers[`${currentQ?.id}_${language}`] || "";
+      const result = await evaluateCodeSubmission(domain, currentQ?.text || "", userCode, language);
 
-    const result = await evaluatePerformance(
-      domain,
-      taskSummary,
-      solutionSummary,
-      "N/A",
-      TRIAL_DURATION - timeLeft,
-      antiCheat
-    );
+      setCumulativeScore(result.score);
+      setAdaptiveFeedback(result.feedback);
+      setShowReview({
+        visible: true,
+        logs: [
+          `[SYSTEM] Code Graded by AI...`,
+          `✅ Score: ${result.score}/100`,
+          `🧠 Analysis: ${result.analysis}`,
+          `[NOTE] Prepare for Next Adaptive Challenge...`
+        ]
+      });
 
-    setSession(prev => ({
-      ...prev,
-      status: 'completed',
-      score: result.score,
-      feedback: result.feedback
-    }));
-
-  }, [questions, answers, timeLeft, antiCheat, domain]);
+    } catch (err) {
+      setAdaptiveFeedback("AI Evaluation Failed. Please try again or check network.");
+    } finally {
+      setIsEvaluating(false);
+    }
+  }, [questions, answers, language, antiCheat, domain, currentQ]);
 
   // Timer Effect that depends on handleSubmit
   useEffect(() => {
@@ -309,15 +311,19 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
     setAnswers(prev => ({ ...prev, [`${questions[currentQuestionIdx].id}_${language}`]: text }));
   };
 
-  const handleNext = () => {
-    if (currentQuestionIdx < questions.length - 1) {
-      setCurrentQuestionIdx(prev => prev + 1);
-    }
-  };
-
-  const handlePrev = () => {
-    if (currentQuestionIdx > 0) {
-      setCurrentQuestionIdx(prev => prev - 1);
+  const handleNext = async () => {
+    setSession(prev => ({ ...prev, status: 'generating' }));
+    try {
+      const nextIter = iteration + 1;
+      const data = await generateAdaptiveQuestion(domain, cumulativeScore, nextIter);
+      setQuestions([data as any]);
+      setCurrentQuestionIdx(0);
+      setIteration(nextIter);
+      setShowReview({ visible: false, logs: [] });
+      setIsEvaluating(false);
+      setSession(prev => ({ ...prev, status: 'active' }));
+    } catch (e) {
+      setSession(prev => ({ ...prev, status: 'completed', feedback: "API Limit Reached or Failed." }));
     }
   };
 
@@ -468,8 +474,6 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
     );
   }
 
-  const currentQ = questions[currentQuestionIdx];
-
   if (isTerminated) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-red-950/90 backdrop-blur-xl">
@@ -539,9 +543,8 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Category: {currentQ?.category}</span>
               <h2 className="text-lg font-bold text-white">Challenge #{currentQ?.id}</h2>
             </div>
-            <div className="flex gap-2">
-              <button onClick={handlePrev} disabled={currentQuestionIdx === 0} className="p-1 rounded hover:bg-slate-700 disabled:opacity-30"><ChevronLeft /></button>
-              <button onClick={handleNext} disabled={currentQuestionIdx === questions.length - 1} className="p-1 rounded hover:bg-slate-700 disabled:opacity-30"><ChevronRight /></button>
+            <div className="flex gap-2 text-xs font-mono text-cyan-400 border border-cyan-900 px-2 py-1 rounded bg-cyan-950">
+              ITERATION {iteration}
             </div>
           </div>
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -652,16 +655,28 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
           <div className="absolute bottom-6 right-6 z-10 flex gap-4">
             <button
               onClick={handleRunTests}
-              disabled={isCompiling}
-              className={`py-3 px-6 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl border border-slate-600 transition-all shadow-lg flex items-center justify-center gap-2 ${isCompiling ? 'opacity-50 cursor-wait' : ''}`}
+              disabled={isCompiling || isEvaluating}
+              className={`py-3 px-6 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl border border-slate-600 transition-all shadow-lg flex items-center justify-center gap-2 ${isCompiling || isEvaluating ? 'opacity-50 cursor-wait' : ''}`}
             >
               {isCompiling ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} fill="currentColor" />}
               Run Code
             </button>
 
-            {currentQuestionIdx === questions.length - 1 && (
-              <button onClick={handleSubmit} className="bg-green-600 hover:bg-green-500 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-green-900/30 flex items-center gap-2 transform active:scale-95 transition-transform">
-                Finalize Verified Solution <Send size={18} />
+            {!showReview.visible ? (
+              <button
+                onClick={handleSubmit}
+                disabled={isEvaluating || session.status !== 'active'}
+                className="bg-green-600 hover:bg-green-500 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-green-900/30 flex items-center gap-2 transform active:scale-95 transition-transform disabled:opacity-50"
+              >
+                {isEvaluating ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+                Submit to AI Judge
+              </button>
+            ) : (
+              <button
+                onClick={handleNext}
+                className="bg-cyan-600 hover:bg-cyan-500 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-cyan-900/30 flex items-center gap-2 transform active:scale-95 transition-transform"
+              >
+                Next Challenge <ChevronRight size={18} />
               </button>
             )}
           </div>
