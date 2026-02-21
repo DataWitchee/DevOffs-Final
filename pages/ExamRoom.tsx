@@ -25,7 +25,7 @@ export const ExamRoom: React.FC<Props> = ({ user, onUpdateUser }) => {
 
    // State
    const [domain, setDomain] = useState<SkillDomain | null>(null);
-   const [status, setStatus] = useState<'payment' | 'setup' | 'loading' | 'mcq' | 'theory' | 'practical' | 'grading' | 'results' | 'failed'>('payment');
+   const [status, setStatus] = useState<'payment' | 'setup' | 'loading' | 'mcq' | 'theory' | 'practical' | 'grading' | 'results' | 'failed'>('setup');
 
    // Payment State
    const [isProcessingPayment, setIsProcessingPayment] = useState(false);
@@ -65,8 +65,9 @@ export const ExamRoom: React.FC<Props> = ({ user, onUpdateUser }) => {
    const isUnauthorized = identity.status === 'UNAUTHORIZED_USER';
 
    useEffect(() => {
-      if (user?.hasExamAccess) {
-         if (!user.biometrics?.descriptor) {
+      // Demo Bypass: Always grant Exam Access
+      if (true) {
+         if (!user?.biometrics?.descriptor) {
             navigate('/biometric-setup', { replace: true });
             return;
          }
@@ -77,7 +78,7 @@ export const ExamRoom: React.FC<Props> = ({ user, onUpdateUser }) => {
       const success = searchParams.get('payment_success');
       const canceled = searchParams.get('payment_canceled');
       if (success === 'true' && user && onUpdateUser) {
-         onUpdateUser({ ...user, hasExamAccess: true });
+         onUpdateUser?.({ ...user, hasExamAccess: true } as User);
          setStatus('setup');
          navigate('/exam', { replace: true });
       } else if (canceled === 'true') {
