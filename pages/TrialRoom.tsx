@@ -19,7 +19,7 @@ const TRIAL_DURATION = 3600; // 60 minutes
 const EXACT_QUESTION_COUNT = 10;
 
 // Strict thresholds for rejection
-const MAX_TAB_SWITCHES = 3;
+const MAX_TAB_SWITCHES = 2;
 const MAX_PASTES = 5;
 const MAX_FOCUS_LOST_TIME = 10000;
 
