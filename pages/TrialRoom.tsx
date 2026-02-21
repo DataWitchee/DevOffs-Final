@@ -5,6 +5,7 @@ import { generateSkillTrial, evaluatePerformance, analyzeEnvironmentSnapshot } f
 import { AlertTriangle, Clock, Eye, Send, Code, Cpu, ShieldAlert, XCircle, CheckCircle, ChevronRight, ChevronLeft, Lock, Loader2, Video, VideoOff, RotateCw, ShieldCheck, Sun, User as UserIcon, Smartphone } from 'lucide-react';
 import { SkillRadar } from '../components/SkillRadar';
 import { useProctoring, WarningType } from '../hooks/useProctoring';
+import { localQuestions } from '../data/LocalQuestions';
 
 interface Props {
   domain: SkillDomain;
@@ -58,17 +59,27 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
 
   useEffect(() => {
     const init = async () => {
-      const data = await generateSkillTrial(domain);
-      // Sort questions to ensure consistent experience (often grouped by category naturally by model)
-      const exactQuestions = data.questions.slice(0, EXACT_QUESTION_COUNT);
+      // FORCE BYPASS BACKEND FOR DEMO
+      setTimeout(() => {
+        // Map LocalQuestions to the format TrialRoom expects
+        const fallbackQuestions = localQuestions.slice(0, EXACT_QUESTION_COUNT).map((q, idx) => ({
+          id: `local-bypass-${idx}`,
+          title: "Problem " + (idx + 1),
+          description: q.questionText,
+          type: "coding",
+          starterCode: q.starterCode || "",
+          testCases: q.testCases || [],
+          constraints: q.constraints || []
+        }));
 
-      setQuestions(exactQuestions);
-      setSession(prev => ({
-        ...prev,
-        status: 'setup',
-        taskDescription: JSON.stringify(exactQuestions),
-        constraints: data.constraints
-      }));
+        setQuestions(fallbackQuestions as any);
+        setSession(prev => ({
+          ...prev,
+          status: 'setup',
+          taskDescription: JSON.stringify(fallbackQuestions),
+          constraints: fallbackQuestions[0]?.constraints || ["O(N) time complexity"]
+        }));
+      }, 2000);
     };
     init();
   }, [domain]);
