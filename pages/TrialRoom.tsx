@@ -61,8 +61,12 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
     const init = async () => {
       // FORCE BYPASS BACKEND FOR DEMO
       setTimeout(() => {
+        // Randomly shuffle and pick EXACT_QUESTION_COUNT questions from the bulk bank
+        const shuffledBank = [...localQuestions].sort(() => 0.5 - Math.random());
+        const selectedQuestions = shuffledBank.slice(0, Math.min(EXACT_QUESTION_COUNT, shuffledBank.length));
+
         // Map LocalQuestions to the format TrialRoom expects
-        const fallbackQuestions = localQuestions.slice(0, EXACT_QUESTION_COUNT).map((q, idx) => ({
+        const fallbackQuestions = selectedQuestions.map((q, idx) => ({
           id: `DEVOFFS-SR-${702 + idx}`,
           category: q.type === 'Code' ? "Practical" : "Theoretical",
           text: q.questionText || "Loading challenge details...",
