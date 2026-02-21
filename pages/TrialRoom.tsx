@@ -127,23 +127,39 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
 
   useEffect(() => {
     const init = async () => {
-      // FORCE BYPASS BACKEND FOR DEMO
-      setTimeout(() => {
-        // 1. Filter the bulk bank by the selected domain (category)
+      try {
+        // Attempt to hit the Generative AI Endpoint
+        const data = await generateSkillTrial(domain);
+        if (!data || data.questions.length === 0) throw new Error("Empty AI Response");
+
+        const aiQuestions = data.questions.map((q: any) => ({
+          id: `AI-GEN-${q.id}`,
+          category: q.category === 'Concept' ? 'Theoretical' : 'Practical',
+          text: q.text,
+          type: "coding",
+          starterCode: "// Implement the AI generated prompt here...",
+          testCases: [],
+          constraints: data.constraints || []
+        }));
+
+        setQuestions(aiQuestions as any);
+        setSession(prev => ({
+          ...prev,
+          status: 'setup',
+          taskDescription: JSON.stringify(aiQuestions),
+          constraints: data.constraints || []
+        }));
+
+      } catch (err) {
+        console.warn("AI Generation Failed or Key Missing. Falling back to High-Quality Local Bank.");
+        // Fallback to offline God-Tier Questions
         let filteredBank = localQuestions.filter((q: any) => q.category === domain);
+        if (filteredBank.length === 0) filteredBank = localQuestions.filter((q: any) => q.category === 'DSA');
+        if (filteredBank.length === 0) filteredBank = localQuestions;
 
-        // 2. Fallback to 'DSA' if the selected category has zero questions
-        if (filteredBank.length === 0) {
-          filteredBank = localQuestions.filter((q: any) => q.category === 'DSA');
-          // Ultimate safety net
-          if (filteredBank.length === 0) filteredBank = localQuestions;
-        }
-
-        // 3. Randomly shuffle and pick EXACT_QUESTION_COUNT questions
         const shuffledBank = [...filteredBank].sort(() => 0.5 - Math.random());
         const selectedQuestions = shuffledBank.slice(0, Math.min(EXACT_QUESTION_COUNT, shuffledBank.length));
 
-        // Map LocalQuestions to the format TrialRoom expects
         const fallbackQuestions = selectedQuestions.map((q, idx) => ({
           id: `DEVOFFS-SR-${702 + idx}`,
           category: q.type === 'Code' ? "Practical" : "Theoretical",
@@ -161,7 +177,7 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
           taskDescription: JSON.stringify(fallbackQuestions),
           constraints: fallbackQuestions[0]?.constraints || ["O(N) time complexity"]
         }));
-      }, 2000);
+      }
     };
     init();
   }, [domain]);

@@ -219,14 +219,26 @@ export const InterviewRoom: React.FC<Props> = ({ onComplete }) => {
     setRound(roundNum);
     setAiState('processing');
 
-    // OFFLINE MOCK: Use LocalQuestions to prevent silent API failures
-    const mockQuestion = localQuestions[Math.floor(Math.random() * localQuestions.length)];
-    const spokenText = mockQuestion.questionText.replace(/`/g, "").replace(/\*\*/g, "").replace(/\n/g, " ");
+    let spokenText = "";
+    let dynamicTime = 60;
+
+    try {
+      // 1. Attempt to hit the Generative AI Endpoint
+      const data = await generateInterviewQuestion(domain, lastScore, roundNum);
+      if (!data || !data.text) throw new Error("Empty AI Response");
+
+      spokenText = data.text;
+      dynamicTime = Math.max(60, data.timeLimit || Math.floor(spokenText.length / 5));
+
+    } catch (err) {
+      console.warn("AI Generation Failed or Key Missing. Falling back to High-Quality Local Bank.");
+      // 2. Fallback to offline God-Tier Questions
+      const mockQuestion = localQuestions[Math.floor(Math.random() * localQuestions.length)];
+      spokenText = mockQuestion.questionText.replace(/`/g, "").replace(/\*\*/g, "").replace(/\n/g, " ");
+      dynamicTime = Math.max(60, Math.floor(spokenText.length / 5));
+    }
 
     setCurrentQuestionText(spokenText);
-
-    // Dynamic Time Calculation: 1 second per 5 characters, minimum 60 seconds
-    const dynamicTime = Math.max(60, Math.floor(spokenText.length / 5));
     setMaxTime(dynamicTime);
     setTimeLeft(dynamicTime);
 
