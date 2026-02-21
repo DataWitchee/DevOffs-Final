@@ -49,7 +49,7 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
     focusLostTime: 0,
   });
 
-  const [language, setLanguage] = useState<'javascript' | 'python' | 'cpp' | 'java' | 'plaintext'>('javascript');
+  const [language, setLanguage] = useState<'python' | 'cpp'>('cpp');
   const [isCompiling, setIsCompiling] = useState(false);
   const [consoleOutput, setConsoleOutput] = useState<{ stdout: string, time: number, memory: number, complexity?: string } | null>(null);
 
@@ -82,33 +82,60 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
       }
 
       const codeToRun = userCode;
-      const data = await simulateExecution(codeToRun, language, currentQ?.text);
 
-      // Predict Time Complexity
-      const complexities = ["O(1)", "O(log N)", "O(N)", "O(N log N)", "O(N^2)"];
-      const mockComplexity = complexities[Math.floor(Math.random() * complexities.length)];
+      // REAL COMPILER API CALL (Piston v2)
+      const pistonVersion = language === 'cpp' ? '10.2.0' : '3.10.0';
+      const pistonLang = language === 'cpp' ? 'cpp' : 'python';
 
-      setConsoleOutput({ stdout: data.stdout, time: data.time, memory: data.memory, complexity: mockComplexity });
+      const res = await fetch('https://emkc.org/api/v2/piston/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          language: pistonLang,
+          version: pistonVersion,
+          files: [{ content: codeToRun }],
+          stdin: "",
+          args: [],
+          compile_timeout: 10000,
+          run_timeout: 3000,
+          compile_memory_limit: -1,
+          run_memory_limit: -1
+        })
+      });
 
-      if (language === 'plaintext') {
-        setShowReview({
-          visible: true,
-          logs: [
-            "[SYSTEM] Validating Pseudo Code Logic...",
-            "✅ Structure Verified",
-            `⏱️ Predicted Time Complexity: ${mockComplexity}`,
-            "[SUCCESS] Conceptual solution approved."
-          ]
-        });
-      } else if (data.memory > 0 || data.stdout) {
+      if (!res.ok) throw new Error("Compiler API failed");
+      const pistonData = await res.json();
+
+      const compileErr = pistonData.compile?.output;
+      const runErr = pistonData.run?.stderr;
+      const stdOut = pistonData.run?.stdout;
+
+      const isError = !!compileErr || !!runErr || pistonData.run?.code !== 0;
+
+      const terminalOutput = `[${language.toUpperCase()} COMPILER v${pistonVersion}]\n\n` +
+        (compileErr ? `COMPILATION ERROR:\n${compileErr}\n` : '') +
+        (isError && runErr ? `RUNTIME ERROR:\n${runErr}\n` : '') +
+        ((stdOut && !isError) ? `OUTPUT:\n${stdOut}\n` : '') +
+        ((!stdOut && !isError && !compileErr) ? `(No output generated)` : '');
+
+      setConsoleOutput({ stdout: terminalOutput, time: 0, memory: 0, complexity: "N/A" });
+
+      if (isError) {
         setShowReview({
           visible: true,
           logs: [
             "[SYSTEM] Compiling solution...",
-            data.stdout?.toLowerCase().includes("error") ? "❌ Compilation / Logic Error Detected" : "✅ Code Execution Successful",
-            `⏱️ Executed in ${data.time}ms`,
-            `🧠 Time Complexity Analyzed: ${mockComplexity}`,
-            data.stdout?.toLowerCase().includes("error") ? "[ERROR] Execution Failed." : "[SUCCESS] Verification Complete."
+            "❌ Compilation / Runtime Error Detected",
+            "[ERROR] Execution Failed. Check console."
+          ]
+        });
+      } else {
+        setShowReview({
+          visible: true,
+          logs: [
+            "[SYSTEM] Compiling solution...",
+            "✅ Code Execution Successful",
+            "[SUCCESS] Verification Complete. Ready for AI Judge."
           ]
         });
       }
@@ -620,11 +647,8 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
                 onChange={(e) => setLanguage(e.target.value as any)}
                 className="bg-slate-800 text-white text-xs px-3 py-1.5 rounded-md border border-slate-600 outline-none focus:border-cyan-500 font-mono"
               >
-                <option value="javascript">JavaScript</option>
-                <option value="python">Python 3</option>
                 <option value="cpp">C++ (GCC)</option>
-                <option value="java">Java</option>
-                <option value="plaintext">Pseudo Code</option>
+                <option value="python">Python 3</option>
               </select>
               <span className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">{currentQ?.category} Engine</span>
             </div>
@@ -632,7 +656,7 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
           <div className="flex-1 w-full bg-[#0f172a] relative">
             <Editor
               height="100%"
-              language={language === 'plaintext' ? 'javascript' : language}
+              language={language}
               theme="vs-dark"
               value={answers[`${currentQ?.id}_${language}`] !== undefined ? answers[`${currentQ?.id}_${language}`] : getLanguageBoilerplate(language, currentQ?.starterCode || "")}
               onChange={(val) => handleAnswerChange(val || '')}
