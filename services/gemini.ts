@@ -311,12 +311,13 @@ export const evaluateCodeSubmission = async (
 export const simulateExecution = async (
     code: string,
     language: string
-): Promise<{ stdout: string; time: number; memory: number }> => {
+): Promise<{ stdout: string; time: number; memory: number; complexity: string }> => {
     const ai = getAiClient();
     const prompt = `You are a high-performance ${language} code execution engine.
     Dry run the following code and predict its standard output exactly as a compiler would print it.
     If there is a syntax error, return the compiler error in the stdout field.
     Provide realistic estimated execution time in ms (e.g. 5) and memory in bytes (e.g. 10240).
+    Provide Big O time complexity as well (e.g. O(N)).
     
     Code:
     ${code}
@@ -333,9 +334,10 @@ export const simulateExecution = async (
                 properties: {
                     stdout: { type: Type.STRING },
                     time: { type: Type.NUMBER },
-                    memory: { type: Type.NUMBER }
+                    memory: { type: Type.NUMBER },
+                    complexity: { type: Type.STRING }
                 },
-                required: ["stdout", "time", "memory"]
+                required: ["stdout", "time", "memory", "complexity"]
             }
         }
     }));

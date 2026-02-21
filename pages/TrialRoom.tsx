@@ -238,6 +238,8 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
     };
   }, [session.status]);
 
+
+
   const handleSubmit = useCallback(async () => {
     // STRICT INTEGRITY CHECK
     const violations: string[] = [];
