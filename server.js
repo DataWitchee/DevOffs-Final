@@ -5,7 +5,7 @@ import Stripe from 'stripe';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { questionMutatorService } from './services/QuestionMutatorService.ts';
-import { hybridQuestionService } from './services/HybridQuestionService.ts';
+import { geminiService } from './services/GeminiService.ts';
 import { debugRouter } from './routes/debug.ts';
 
 dotenv.config();
@@ -161,14 +161,14 @@ app.get('/api/questions/mutate', async (req, res) => {
 // Diagnostics Route
 app.use('/api/debug', debugRouter);
 
-// Hybrid Question Route
+// Pure Gemini Question Route (Fast, Guaranteed Output)
 app.get('/api/question/random', async (req, res) => {
   try {
-    const questionData = await hybridQuestionService.fetchAndMutateRandomProblem();
+    const questionData = await geminiService.generateQuestion();
     res.json(questionData);
   } catch (error) {
-    console.error('Error fetching hybrid question:', error);
-    res.status(500).json({ error: 'Failed to generate hybrid question' });
+    console.error('Error fetching gemini question:', error);
+    res.status(500).json({ error: 'Failed to generate question' });
   }
 });
 
