@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
 import { Clock, Code2, Cpu, Play, CheckCircle, ShieldCheck, XCircle, Terminal, AlertTriangle } from 'lucide-react';
-import axios from 'axios';
 import { API_BASE_URL } from '../config';
 import { localQuestions } from '../data/LocalQuestions';
 
@@ -10,7 +9,7 @@ const activeQuestion = localQuestions.find(q => q.category === 'DSA') || localQu
 const TARGET_CODE = activeQuestion.starterCode || "";
 
 export const BattleArenaPage: React.FC = () => {
-  const [language, setLanguage] = useState<'javascript' | 'python' | 'cpp' | 'java' | 'plaintext'>('javascript');
+  const [language, setLanguage] = useState<'python' | 'cpp'>('cpp');
   const [userCode, setUserCode] = useState(TARGET_CODE);
   const [userProgress, setUserProgress] = useState(0);
   const [timeLeft, setTimeLeft] = useState(300); // 5 minutes
@@ -83,26 +82,16 @@ export const BattleArenaPage: React.FC = () => {
     setShowReview({ visible: false, logs: [] });
 
     try {
-      const { data } = await axios.post(`${API_BASE_URL}/api/execute`, {
-        code: userCode,
-        language: language
+      const BACKEND_URL = 'https://devoffs-api.onrender.com';
+      const res = await fetch(`${BACKEND_URL}/api/execute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: userCode, language })
       });
+      const data = await res.json();
 
       setConsoleOutput({ stdout: data.stdout, time: data.time, memory: data.memory });
 
-      if (language === 'plaintext') {
-        setShowReview({
-          visible: true,
-          logs: [
-            "[SYSTEM] Validating Pseudo Code Logic...",
-            "✅ Structure Verified",
-            "✅ Logic Flows Validated",
-            "[SUCCESS] Conceptual solution approved."
-          ]
-        });
-        setIsCompiling(false);
-        return;
-      }
 
       // Basic success validation based on memory/time presence
       if (data.memory > 0 || data.stdout) {
@@ -215,17 +204,14 @@ export const BattleArenaPage: React.FC = () => {
         {/* User Editor */}
         <div className="flex-1 flex flex-col border-r border-slate-800 relative group">
           <div className="h-12 shrink-0 bg-[#1e1e1e] flex items-center justify-between px-4 border-b border-slate-800 z-10">
-            <div className="font-mono text-xs text-cyan-400/70">solution.{language === 'javascript' ? 'js' : language === 'python' ? 'py' : language === 'cpp' ? 'cpp' : language === 'java' ? 'java' : 'txt'}</div>
+            <div className="font-mono text-xs text-cyan-400/70">solution.{language === 'python' ? 'py' : 'cpp'}</div>
             <select
               className="bg-slate-800 text-xs text-slate-200 border border-slate-700 rounded px-2 py-1 outline-none"
               value={language}
               onChange={(e) => setLanguage(e.target.value as any)}
             >
-              <option value="cpp">C++</option>
-              <option value="python">Python</option>
-              <option value="java">Java</option>
-              <option value="javascript">JavaScript</option>
-              <option value="plaintext">Pseudo Code</option>
+              <option value="cpp">C++ (GCC)</option>
+              <option value="python">Python 3</option>
             </select>
           </div>
           {/* Cyberpunk Glow border element */}

@@ -7,8 +7,7 @@ import { SkillRadar } from '../components/SkillRadar';
 import { useProctoring, WarningType } from '../hooks/useProctoring';
 import { localQuestions } from '../data/LocalQuestionBank';
 import Editor from '@monaco-editor/react';
-import axios from 'axios';
-import { API_BASE_URL } from '../config';
+
 
 interface Props {
   domain: SkillDomain;
