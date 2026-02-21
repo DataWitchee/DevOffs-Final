@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => {
   // Load env file based on `mode` in the current working directory.
   const env = loadEnv(mode, (process as any).cwd(), '');
-  
+
   return {
     plugins: [react()],
     build: {
@@ -30,6 +30,7 @@ export default defineConfig(({ mode }) => {
       // DO NOT replace the entire process.env object as it breaks polyfills
     },
     server: {
+      host: true, // Exposes the server to the LAN
       port: 3000,
       proxy: {
         '/api': {

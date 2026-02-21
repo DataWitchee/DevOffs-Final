@@ -11,8 +11,8 @@ export default async function handler(req, res) {
   const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
   if (!stripeSecretKey) {
     console.error("CRITICAL: STRIPE_SECRET_KEY is missing in environment variables.");
-    return res.status(500).json({ 
-      error: "Server configuration error: Payment provider key is not configured." 
+    return res.status(500).json({
+      error: "Server configuration error: Payment provider key is not configured."
     });
   }
 
@@ -22,25 +22,32 @@ export default async function handler(req, res) {
   try {
     const { userId, email, returnUrl, type, plan } = req.body;
 
-    if (!userId) {
-      return res.status(400).json({ error: "Missing required parameter: userId" });
+    if (!userId || !returnUrl || !type) {
+      return res.status(400).json({ error: "Missing required parameters." });
     }
-    
+
+    // Basic open redirect prevention
+    try {
+      const parsedReturnUrl = new URL(returnUrl);
+    } catch (e) {
+      return res.status(400).json({ error: "Invalid return URL." });
+    }
+
     // Dynamic Configuration based on Type and Plan
     // Prices are enforced server-side for security
     let productName = 'Professional Certification Exam';
     let amount = 5000; // $50.00
     let description = 'High-Stakes Skill Verification Exam Access';
     let mode = 'payment'; // Default for one-time
-    
+
     if (type === 'subscription') {
-      productName = 'PSN Verified Membership';
+      productName = 'DevOffs Verified Membership';
       if (plan === 'yearly') {
-          amount = 30000; // $300.00
-          description = 'Yearly PSN Verified Pro Membership';
+        amount = 30000; // $300.00
+        description = 'Yearly DevOffs Verified Pro Membership';
       } else {
-          amount = 2900; // $29.00
-          description = 'Monthly PSN Verified Pro Membership';
+        amount = 2900; // $29.00
+        description = 'Monthly DevOffs Verified Pro Membership';
       }
       // Note: For real subscriptions you'd use mode: 'subscription', 
       // but here we are using 'payment' for a fixed-term access credits approach as per existing UI.
@@ -56,7 +63,7 @@ export default async function handler(req, res) {
             product_data: {
               name: productName,
               description: description,
-              images: ['https://cdn-icons-png.flaticon.com/512/2921/2921222.png'], 
+              images: ['https://cdn-icons-png.flaticon.com/512/2921/2921222.png'],
             },
             unit_amount: amount,
           },

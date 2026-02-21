@@ -14,6 +14,12 @@ export interface User {
   isAuthenticated?: boolean; // Added for login flow
   isCertified?: boolean; // NEW: Global Certification Badge
   hasExamAccess?: boolean; // NEW: Paid access to exams
+  biometrics?: {
+    descriptor: Float32Array | number[];
+    age?: number;
+    gender?: string;
+    expressions?: Record<string, number>;
+  };
   history?: TrialSession[];
   interviews?: InterviewSession[]; // New: Interview History
   exams?: ExamSession[]; // New: Competitive Exams History
@@ -66,7 +72,7 @@ export enum SkillDomain {
   AUTONOMOUS_SYS = "Autonomous Systems",
   GAME_DEV = "Game Engine & Graphics", // Renamed from Game Development for specificity
   CONTROL_SYS = "Control Systems / Embedded", // Merged with Embedded
-  
+
   // Tier 3: Physical & Specialized Engineering
   CIVIL = "Civil Engineering",
   MECHANICAL = "Mechanical Engineering",
@@ -82,7 +88,7 @@ export enum SkillDomain {
   INDUSTRIAL = "Industrial Engineering",
   SAFETY = "Safety Engineering",
   LOGISTICS = "Logistics & Supply Chain",
-  
+
   // Niche Fields
   QUANTUM = "Quantum Engineering",
   NANO = "Nanotechnology",
@@ -151,7 +157,7 @@ export interface ExamMCQ {
   id: number;
   question: string;
   options: string[];
-  correctIndex: number; // Hidden from client
+  correctIndex: number; // WARNING: Currently exposed to the client. Should be managed server-side in a production environment.
   userAnswer?: number;
 }
 
@@ -174,11 +180,11 @@ export interface ExamSession {
   status: 'setup' | 'mcq' | 'theory' | 'practical' | 'grading' | 'completed' | 'failed';
   startTime: number;
   endTime?: number;
-  
+
   mcqData: ExamMCQ[];
   theoryData: ExamTheory[];
   practicalData: ExamPractical[];
-  
+
   sectionScores: {
     mcq: number;
     theory: number;
@@ -186,7 +192,7 @@ export interface ExamSession {
   };
   overallScore: number;
   feedback: string;
-  
+
   antiCheat: AntiCheatLog;
 }
 

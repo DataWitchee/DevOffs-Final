@@ -41,11 +41,10 @@ export const UserMenu: React.FC<Props> = ({ user, onLogout }) => {
         aria-label="User menu"
       >
         <div
-          className={`w-10 h-10 rounded-full overflow-hidden border-2 transition-all duration-200 ${
-            isOpen
+          className={`w-10 h-10 rounded-full overflow-hidden border-2 transition-all duration-200 ${isOpen
               ? 'border-cyan-400 ring-2 ring-cyan-400/20 scale-105'
               : 'border-slate-600 group-hover:border-slate-400 group-hover:scale-105 group-hover:shadow-lg'
-          }`}
+            }`}
         >
           {user.avatar ? (
             <img
@@ -66,7 +65,7 @@ export const UserMenu: React.FC<Props> = ({ user, onLogout }) => {
       {/* Dropdown Modal */}
       {isOpen && (
         <div className="absolute right-0 top-14 w-80 bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 overflow-hidden z-50 animate-fade-in origin-top-right">
-          
+
           {/* Section A: User Info */}
           <div className="flex flex-col items-center pt-8 pb-6 px-6 bg-slate-800/50 border-b border-slate-700">
             <Link to="/profile" onClick={() => setIsOpen(false)} className="relative group cursor-pointer">
@@ -86,7 +85,7 @@ export const UserMenu: React.FC<Props> = ({ user, onLogout }) => {
                 )}
               </div>
             </Link>
-            
+
             <div className="mt-4 text-center">
               <h3 className="text-lg font-bold text-white">{user.name || 'User'}</h3>
               <p className="text-sm text-slate-400">{user.email || 'email@example.com'}</p>
@@ -105,6 +104,7 @@ export const UserMenu: React.FC<Props> = ({ user, onLogout }) => {
 
           {/* Section B: Actions */}
           <div className="p-2 space-y-1">
+            <MenuLink to="/skill-dna" icon={<Trophy size={18} className="text-cyan-400" />} label="Skill DNA Fingerprint" onClick={() => setIsOpen(false)} />
             <MenuLink to="/profile" icon={<UserIcon size={18} />} label="View Profile" onClick={() => setIsOpen(false)} />
             <MenuLink to="/setup" icon={<Settings size={18} />} label="Account Settings" onClick={() => setIsOpen(false)} />
             <MenuLink to="/" icon={<Trophy size={18} />} label="My Trials & Achievements" onClick={() => setIsOpen(false)} />
@@ -128,8 +128,8 @@ export const UserMenu: React.FC<Props> = ({ user, onLogout }) => {
 };
 
 const MenuLink = ({ icon, label, to, onClick }: { icon: React.ReactNode; label: string; to: string; onClick: () => void }) => (
-  <Link 
-    to={to} 
+  <Link
+    to={to}
     onClick={onClick}
     className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-xl transition-all duration-200 group"
   >

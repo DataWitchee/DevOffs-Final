@@ -3,12 +3,9 @@
 
 // Determines the backend URL based on environment
 const getApiUrl = () => {
-  // If we are in local development and not using Vercel Dev, we might point to a specific port
-  if (window.location.hostname === 'localhost' && !window.location.port.includes('3000')) {
-    return 'http://localhost:4242/api';
-  }
   // Standard Vercel deployment / Vercel Dev uses relative /api path
-  return '/api'; 
+  // Vite Dev Server is configured to proxy /api to http://localhost:4242
+  return '/api';
 };
 
 export const paymentService = {
@@ -41,21 +38,21 @@ export const paymentService = {
     // Construct a clean absolute return URL for Stripe to redirect back to
     // Ensure there is a trailing slash before the hash for standard routing
     const origin = window.location.origin;
-    const returnPath = type === 'exam' ? '/#/exam' : '/#/'; 
+    const returnPath = type === 'exam' ? '/#/exam' : '/#/';
     const returnUrl = `${origin}${returnPath}`;
 
     try {
       const apiUrl = `${getApiUrl()}/create-checkout-session`;
-      
+
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          userId, 
-          email, 
+        body: JSON.stringify({
+          userId,
+          email,
           returnUrl,
           type,
-          plan 
+          plan
         })
       });
 
@@ -72,7 +69,7 @@ export const paymentService = {
       if (!response.ok) {
         throw new Error(data.error || "Failed to create checkout session");
       }
-      
+
       if (data.url) {
         // Critical: Redirect the user to the Stripe hosted checkout page
         window.location.href = data.url;

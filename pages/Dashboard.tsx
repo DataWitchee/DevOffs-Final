@@ -1,9 +1,11 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, SkillDomain, SkillDNAScore } from '../types';
 import { Play, TrendingUp, ShieldCheck, Lock, AlertCircle, Zap, Users, XCircle, Mic, Video, Award, Clock, FileText, ShieldAlert, CheckCircle, Brain, Swords } from 'lucide-react';
 import { SkillRadar } from '../components/SkillRadar';
+import { GameModeSelector } from '../components/GameModeSelector';
+import { CyberLoader } from '../components/CyberLoader';
 
 interface Props {
   user: User;
@@ -12,15 +14,18 @@ interface Props {
 
 export const Dashboard: React.FC<Props> = ({ user, onStartTrial }) => {
   const navigate = useNavigate();
+  const [showModeSelect, setShowModeSelect] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [selectedDomain, setSelectedDomain] = useState<SkillDomain | null>(null);
 
   // Usage Limits
   const MAX_FREE_TRIALS = 5;
   const MAX_FREE_INTERVIEWS = 5;
   const trialsUsed = user.monthlyUsage?.trialsUsed || 0;
   const interviewsUsed = user.monthlyUsage?.interviewsUsed || 0;
-  
-  const canStartTrial = user.isPremium || trialsUsed < MAX_FREE_TRIALS;
-  const canStartInterview = user.isPremium || interviewsUsed < MAX_FREE_INTERVIEWS;
+
+  const canStartTrial = true;
+  const canStartInterview = true;
 
   // Calculate Average Skill DNA from History
   const aggregateDNA = useMemo(() => {
@@ -62,7 +67,7 @@ export const Dashboard: React.FC<Props> = ({ user, onStartTrial }) => {
   // --- NEW: Activity Categorization & Stats ---
   const { activities, activityStats } = useMemo(() => {
     const list: any[] = [];
-    
+
     // 1. Process History (Trials & Interviews)
     user.history?.forEach(h => {
       const isInterview = h.feedback?.includes("VOICE INTERVIEW");
@@ -78,30 +83,30 @@ export const Dashboard: React.FC<Props> = ({ user, onStartTrial }) => {
 
     // 2. Process Exams (Check if array exists, else fallback to isCertified check for display)
     if (user.exams && user.exams.length > 0) {
-       user.exams.forEach(e => {
-         list.push({
-            type: 'exam',
-            domain: e.domain,
-            date: e.endTime || e.startTime,
-            score: e.overallScore,
-            status: e.status === 'completed' ? 'Certified' : 'Failed',
-            id: e.id
-         });
-       });
+      user.exams.forEach(e => {
+        list.push({
+          type: 'exam',
+          domain: e.domain,
+          date: e.endTime || e.startTime,
+          score: e.overallScore,
+          status: e.status === 'completed' ? 'Certified' : 'Failed',
+          id: e.id
+        });
+      });
     } else if (user.isCertified) {
-       // Mock entry if certified but no record present in current session
-         list.push({
-            type: 'exam',
-            domain: 'Engineering Certification',
-            date: Date.now(),
-            score: 95, 
-            status: 'Certified',
-            id: 'cert-1'
-         });
+      // Mock entry if certified but no record present in current session
+      list.push({
+        type: 'exam',
+        domain: 'Engineering Certification',
+        date: Date.now(),
+        score: 95,
+        status: 'Certified',
+        id: 'cert-1'
+      });
     }
 
     // Sort by Date Descending
-    const sorted = list.sort((a,b) => b.date - a.date);
+    const sorted = list.sort((a, b) => b.date - a.date);
 
     return {
       activities: sorted,
@@ -111,13 +116,13 @@ export const Dashboard: React.FC<Props> = ({ user, onStartTrial }) => {
         exams: list.filter(a => a.type === 'exam').length,
         // Using available stats for wins. Assuming public for now as private aren't tracked separately in User type yet.
         arenaWinsPublic: user.stats?.arenaWins || 0,
-        arenaWinsPrivate: 0 
+        arenaWinsPrivate: 0
       }
     };
   }, [user]);
 
   const getActivityIcon = (type: string) => {
-    switch(type) {
+    switch (type) {
       case 'interview': return <Mic size={16} className="text-cyan-400" />;
       case 'exam': return <Award size={16} className="text-yellow-400" />;
       default: return <FileText size={16} className="text-slate-400" />;
@@ -131,10 +136,22 @@ export const Dashboard: React.FC<Props> = ({ user, onStartTrial }) => {
 
   const handleStartTrialClick = (domain: SkillDomain) => {
     if (canStartTrial) {
-      onStartTrial(domain);
+      setSelectedDomain(domain);
+      setShowModeSelect(true);
     } else {
       alert("You have reached your monthly limit of 5 free Skill Trials. Please upgrade to Pro for unlimited access.");
       navigate('/pricing');
+    }
+  };
+
+  const handleModeSelect = async (mode: 'practice' | 'ranked') => {
+    setShowModeSelect(false);
+    setIsLoading(true);
+    // Dramatic effect 1.5s
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    setIsLoading(false);
+    if (selectedDomain) {
+      onStartTrial(selectedDomain);
     }
   };
 
@@ -147,6 +164,10 @@ export const Dashboard: React.FC<Props> = ({ user, onStartTrial }) => {
     }
   };
 
+  if (isLoading) {
+    return <CyberLoader text="Calibrating Secure Environment..." />;
+  }
+
   return (
     <div className="space-y-8 animate-fade-in">
       {/* Header */}
@@ -155,20 +176,11 @@ export const Dashboard: React.FC<Props> = ({ user, onStartTrial }) => {
           <h1 className="text-3xl font-bold text-white mb-2">Welcome back, {user.name}</h1>
           <p className="text-slate-400">Your live skill verification status is <span className="text-green-400 font-semibold">Active</span></p>
         </div>
-        {!user.isPremium && (
-          <button 
-            onClick={() => navigate('/pricing')}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-lg hover:opacity-90 transition-all shadow-lg shadow-orange-900/20"
-          >
-            <Lock size={16} />
-            Unlock Premium Analysis
-          </button>
-        )}
       </div>
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+
         {/* Left: Stats & DNA */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl">
@@ -179,14 +191,14 @@ export const Dashboard: React.FC<Props> = ({ user, onStartTrial }) => {
               </h2>
               <span className="text-xs font-mono text-cyan-400 bg-cyan-950 px-2 py-1 rounded">LIVE UPDATED</span>
             </div>
-            
+
             {!hasHistory ? (
               <div className="flex flex-col items-center justify-center py-12 text-center bg-slate-900/50 rounded-xl border border-slate-700 border-dashed">
-                 <div className="p-4 bg-slate-800 rounded-full mb-4">
-                    <TrendingUp className="text-slate-500" size={32} />
-                 </div>
-                 <h3 className="text-lg font-medium text-white mb-2">No Skill DNA Generated Yet</h3>
-                 <p className="text-slate-400 text-sm max-w-sm">Complete your first skill trial to generate your verified AI performance matrix.</p>
+                <div className="p-4 bg-slate-800 rounded-full mb-4">
+                  <TrendingUp className="text-slate-500" size={32} />
+                </div>
+                <h3 className="text-lg font-medium text-white mb-2">No Skill DNA Generated Yet</h3>
+                <p className="text-slate-400 text-sm max-w-sm">Complete your first skill trial to generate your verified AI performance matrix.</p>
               </div>
             ) : (
               <div className="flex flex-col md:flex-row gap-8 items-center">
@@ -209,7 +221,7 @@ export const Dashboard: React.FC<Props> = ({ user, onStartTrial }) => {
                       <span className="text-white font-bold">{Math.min(100, 80 + (user.history?.length || 0) * 2)}/100</span>
                     </div>
                     <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                       <div className="h-full bg-indigo-500 transition-all duration-1000" style={{ width: `${Math.min(100, 80 + (user.history?.length || 0) * 2)}%` }}></div>
+                      <div className="h-full bg-indigo-500 transition-all duration-1000" style={{ width: `${Math.min(100, 80 + (user.history?.length || 0) * 2)}%` }}></div>
                     </div>
                   </div>
                   <div className="p-4 bg-slate-700/50 rounded-lg border border-slate-600">
@@ -225,44 +237,44 @@ export const Dashboard: React.FC<Props> = ({ user, onStartTrial }) => {
           {/* Verification & Activity Log (UPDATED) */}
           <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6">
             <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-               <ShieldCheck className="text-green-400" /> Verification & Activity Log
+              <ShieldCheck className="text-green-400" /> Verification & Activity Log
             </h3>
-            
+
             {/* Summary Stats Row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-               {/* Trials */}
-               <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700 flex flex-col items-center justify-center">
-                  <div className="text-slate-400 text-[10px] uppercase font-bold mb-1 tracking-wider">Skill Trials</div>
-                  <div className="text-2xl font-bold text-white">{activityStats.trials}</div>
-                  <div className="text-[10px] text-slate-500">Attended</div>
-               </div>
-               
-               {/* Exams */}
-               <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700 flex flex-col items-center justify-center">
-                  <div className="text-slate-400 text-[10px] uppercase font-bold mb-1 tracking-wider">Comp. Exams</div>
-                  <div className={`text-2xl font-bold ${activityStats.exams > 0 ? 'text-yellow-400' : 'text-slate-600'}`}>{activityStats.exams}</div>
-                  <div className="text-[10px] text-slate-500">{activityStats.exams > 0 ? 'Certified' : 'Not Taken'}</div>
-               </div>
+              {/* Trials */}
+              <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700 flex flex-col items-center justify-center">
+                <div className="text-slate-400 text-[10px] uppercase font-bold mb-1 tracking-wider">Skill Trials</div>
+                <div className="text-2xl font-bold text-white">{activityStats.trials}</div>
+                <div className="text-[10px] text-slate-500">Attended</div>
+              </div>
 
-               {/* Arena */}
-               <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700 flex flex-col items-center justify-center">
-                  <div className="text-slate-400 text-[10px] uppercase font-bold mb-1 tracking-wider">Arena Wins</div>
-                  <div className="flex items-baseline gap-1">
-                     <span className="text-2xl font-bold text-purple-400">{activityStats.arenaWinsPublic}</span>
-                     <span className="text-[10px] text-slate-500">Pub</span>
-                     <span className="text-slate-600">/</span>
-                     <span className="text-xl font-bold text-slate-500">{activityStats.arenaWinsPrivate}</span>
-                     <span className="text-[10px] text-slate-500">Pvt</span>
-                  </div>
-                  <div className="text-[10px] text-slate-500">Competitive</div>
-               </div>
+              {/* Exams */}
+              <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700 flex flex-col items-center justify-center">
+                <div className="text-slate-400 text-[10px] uppercase font-bold mb-1 tracking-wider">Comp. Exams</div>
+                <div className={`text-2xl font-bold ${activityStats.exams > 0 ? 'text-yellow-400' : 'text-slate-600'}`}>{activityStats.exams}</div>
+                <div className="text-[10px] text-slate-500">{activityStats.exams > 0 ? 'Certified' : 'Not Taken'}</div>
+              </div>
 
-               {/* Interviews */}
-               <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700 flex flex-col items-center justify-center">
-                  <div className="text-slate-400 text-[10px] uppercase font-bold mb-1 tracking-wider">AI Interviews</div>
-                  <div className="text-2xl font-bold text-cyan-400">{activityStats.interviews}</div>
-                  <div className="text-[10px] text-slate-500">Assessments</div>
-               </div>
+              {/* Arena */}
+              <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700 flex flex-col items-center justify-center">
+                <div className="text-slate-400 text-[10px] uppercase font-bold mb-1 tracking-wider">Arena Wins</div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-2xl font-bold text-purple-400">{activityStats.arenaWinsPublic}</span>
+                  <span className="text-[10px] text-slate-500">Pub</span>
+                  <span className="text-slate-600">/</span>
+                  <span className="text-xl font-bold text-slate-500">{activityStats.arenaWinsPrivate}</span>
+                  <span className="text-[10px] text-slate-500">Pvt</span>
+                </div>
+                <div className="text-[10px] text-slate-500">Competitive</div>
+              </div>
+
+              {/* Interviews */}
+              <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700 flex flex-col items-center justify-center">
+                <div className="text-slate-400 text-[10px] uppercase font-bold mb-1 tracking-wider">AI Interviews</div>
+                <div className="text-2xl font-bold text-cyan-400">{activityStats.interviews}</div>
+                <div className="text-[10px] text-slate-500">Assessments</div>
+              </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -283,23 +295,23 @@ export const Dashboard: React.FC<Props> = ({ user, onStartTrial }) => {
                     {activities.map((item, i) => (
                       <tr key={item.id || i} className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors">
                         <td className="py-4 pl-2">
-                           <div className="p-2 bg-slate-800 rounded-lg inline-block border border-slate-700">
-                             {getActivityIcon(item.type)}
-                           </div>
+                          <div className="p-2 bg-slate-800 rounded-lg inline-block border border-slate-700">
+                            {getActivityIcon(item.type)}
+                          </div>
                         </td>
                         <td className="py-4 font-medium">
-                           <div>{item.domain}</div>
-                           <div className="text-xs text-slate-500 capitalize">{item.type}</div>
+                          <div>{item.domain}</div>
+                          <div className="text-xs text-slate-500 capitalize">{item.type}</div>
                         </td>
                         <td className="py-4 text-slate-400 text-sm">{new Date(item.date).toLocaleDateString()}</td>
                         <td className="py-4">
-                           <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase border flex w-fit items-center gap-1 ${getStatusColor(item.status)}`}>
-                              {item.status === 'Verified' || item.status === 'Certified' ? <CheckCircle size={10} /> : <XCircle size={10} />}
-                              {item.status}
-                           </span>
+                          <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase border flex w-fit items-center gap-1 ${getStatusColor(item.status)}`}>
+                            {item.status === 'Verified' || item.status === 'Certified' ? <CheckCircle size={10} /> : <XCircle size={10} />}
+                            {item.status}
+                          </span>
                         </td>
                         <td className={`py-4 text-right font-mono font-bold ${item.score >= 60 ? 'text-cyan-400' : 'text-slate-500'}`}>
-                           {item.score.toFixed(0)}
+                          {item.score.toFixed(0)}
                         </td>
                       </tr>
                     ))}
@@ -311,147 +323,119 @@ export const Dashboard: React.FC<Props> = ({ user, onStartTrial }) => {
 
           {/* Competitive Exams Section */}
           <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl relative overflow-hidden group">
-              <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                  <Award size={120} />
+            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+              <Award size={120} />
+            </div>
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                    <Award className="text-yellow-400" /> Competitive Certification Exams
+                  </h2>
+                  <p className="text-slate-400 text-sm mt-1">Rigorous, 3-hour comprehensive assessments for elite certification.</p>
+                </div>
+                <span className="px-3 py-1 bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 text-xs font-bold rounded-full animate-pulse">
+                  HIGH STAKES
+                </span>
               </div>
-              <div className="relative z-10">
-                 <div className="flex items-center justify-between mb-6">
-                    <div>
-                        <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                           <Award className="text-yellow-400" /> Competitive Certification Exams
-                        </h2>
-                        <p className="text-slate-400 text-sm mt-1">Rigorous, 3-hour comprehensive assessments for elite certification.</p>
-                    </div>
-                    <span className="px-3 py-1 bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 text-xs font-bold rounded-full animate-pulse">
-                       HIGH STAKES
-                    </span>
-                 </div>
 
-                 <div className="grid grid-cols-3 gap-4 mb-6">
-                    <div className="bg-slate-800/80 p-4 rounded-xl border border-slate-700 text-center">
-                        <Clock className="mx-auto text-blue-400 mb-2" size={24} />
-                        <div className="text-xl font-bold text-white">30m</div>
-                        <div className="text-xs text-slate-500 uppercase font-bold">MCQs</div>
-                        <div className="text-[10px] text-slate-600 mt-1">20 Questions</div>
-                    </div>
-                    <div className="bg-slate-800/80 p-4 rounded-xl border border-slate-700 text-center">
-                        <FileText className="mx-auto text-purple-400 mb-2" size={24} />
-                        <div className="text-xl font-bold text-white">90m</div>
-                        <div className="text-xs text-slate-500 uppercase font-bold">Theory</div>
-                        <div className="text-[10px] text-slate-600 mt-1">30 Questions</div>
-                    </div>
-                    <div className="bg-slate-800/80 p-4 rounded-xl border border-slate-700 text-center">
-                        <Zap className="mx-auto text-green-400 mb-2" size={24} />
-                        <div className="text-xl font-bold text-white">60m</div>
-                        <div className="text-xs text-slate-500 uppercase font-bold">Practical</div>
-                        <div className="text-[10px] text-slate-600 mt-1">10 Tasks</div>
-                    </div>
-                 </div>
-
-                 <div className="bg-red-900/20 border border-red-900/50 p-4 rounded-xl mb-6 flex items-start gap-3">
-                    <ShieldAlert className="text-red-400 shrink-0 mt-0.5" size={18} />
-                    <div className="text-sm">
-                       <strong className="text-red-300 block mb-1">Strict Proctoring Environment</strong>
-                       <p className="text-red-200/70 text-xs">
-                          Continuous AI Camera Monitoring. No tabs allowed. No copy-paste. 
-                          Violations (focus loss, external devices, multiple people) result in immediate disqualification.
-                       </p>
-                    </div>
-                 </div>
-
-                 <button 
-                    onClick={() => navigate('/exam')}
-                    className="w-full py-4 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white font-bold rounded-xl shadow-lg shadow-orange-900/20 transition-all flex items-center justify-center gap-2"
-                 >
-                    Enter Exam Hall <Award size={18} />
-                 </button>
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className="bg-slate-800/80 p-4 rounded-xl border border-slate-700 text-center">
+                  <Clock className="mx-auto text-blue-400 mb-2" size={24} />
+                  <div className="text-xl font-bold text-white">30m</div>
+                  <div className="text-xs text-slate-500 uppercase font-bold">MCQs</div>
+                  <div className="text-[10px] text-slate-600 mt-1">20 Questions</div>
+                </div>
+                <div className="bg-slate-800/80 p-4 rounded-xl border border-slate-700 text-center">
+                  <FileText className="mx-auto text-purple-400 mb-2" size={24} />
+                  <div className="text-xl font-bold text-white">90m</div>
+                  <div className="text-xs text-slate-500 uppercase font-bold">Theory</div>
+                  <div className="text-[10px] text-slate-600 mt-1">30 Questions</div>
+                </div>
+                <div className="bg-slate-800/80 p-4 rounded-xl border border-slate-700 text-center">
+                  <Zap className="mx-auto text-green-400 mb-2" size={24} />
+                  <div className="text-xl font-bold text-white">60m</div>
+                  <div className="text-xs text-slate-500 uppercase font-bold">Practical</div>
+                  <div className="text-[10px] text-slate-600 mt-1">10 Tasks</div>
+                </div>
               </div>
+
+              <div className="bg-red-900/20 border border-red-900/50 p-4 rounded-xl mb-6 flex items-start gap-3">
+                <ShieldAlert className="text-red-400 shrink-0 mt-0.5" size={18} />
+                <div className="text-sm">
+                  <strong className="text-red-300 block mb-1">Strict Proctoring Environment</strong>
+                  <p className="text-red-200/70 text-xs">
+                    Continuous AI Camera Monitoring. No tabs allowed. No copy-paste.
+                    Violations (focus loss, external devices, multiple people) result in immediate disqualification.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => navigate('/exam')}
+                className="w-full py-4 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white font-bold rounded-xl shadow-lg shadow-orange-900/20 transition-all flex items-center justify-center gap-2"
+              >
+                Enter Exam Hall <Award size={18} />
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Right: Actions */}
         <div className="space-y-6">
-          
+
           {/* Live Challenge Card */}
-          <div 
-             onClick={() => navigate('/arena')}
-             className="cursor-pointer group relative overflow-hidden bg-gradient-to-br from-purple-900 to-indigo-900 border border-purple-500/50 rounded-2xl p-6 shadow-2xl hover:shadow-purple-500/20 transition-all"
+          <div
+            onClick={() => navigate('/arena')}
+            className="cursor-pointer group relative overflow-hidden bg-gradient-to-br from-purple-900 to-indigo-900 border border-purple-500/50 rounded-2xl p-6 shadow-2xl hover:shadow-purple-500/20 transition-all"
           >
-             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                <Zap size={100} />
-             </div>
-             <div className="relative z-10">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="bg-purple-500/20 text-purple-300 text-xs font-bold px-2 py-1 rounded border border-purple-500/30 animate-pulse">LIVE NOW</span>
-                  <Users size={20} className="text-purple-300" />
-                </div>
-                <h2 className="text-2xl font-bold text-white mb-1">Open Race Arena</h2>
-                <p className="text-purple-200 text-sm mb-4">Compete in real-time coding challenges against others.</p>
-                <div className="flex items-center gap-2 text-white font-bold text-sm group-hover:translate-x-1 transition-transform">
-                   Join Race Queue <Play size={16} fill="currentColor" />
-                </div>
-             </div>
+            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Zap size={100} />
+            </div>
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-4">
+                <span className="bg-purple-500/20 text-purple-300 text-xs font-bold px-2 py-1 rounded border border-purple-500/30 animate-pulse">LIVE NOW</span>
+                <Users size={20} className="text-purple-300" />
+              </div>
+              <h2 className="text-2xl font-bold text-white mb-1">Open Race Arena</h2>
+              <p className="text-purple-200 text-sm mb-4">Compete in real-time coding challenges against others.</p>
+              <div className="flex items-center gap-2 text-white font-bold text-sm group-hover:translate-x-1 transition-transform">
+                Join Race Queue <Play size={16} fill="currentColor" />
+              </div>
+            </div>
           </div>
 
           {/* AI Voice Interview Box */}
           <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 hover:border-cyan-500 rounded-2xl p-6 shadow-xl transition-all group relative overflow-hidden">
-             <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-3xl group-hover:bg-cyan-500/10 transition-colors"></div>
-             
-             <div className="flex items-center justify-between mb-4">
-                <div className="p-2 bg-slate-800 rounded-lg border border-slate-700 text-cyan-400 group-hover:text-cyan-300 group-hover:border-cyan-500/50 transition-colors">
-                   <Mic size={24} />
-                </div>
-                <div className="flex gap-1">
-                   <Video size={16} className="text-slate-500" />
-                   <ShieldCheck size={16} className="text-slate-500" />
-                </div>
-             </div>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-3xl group-hover:bg-cyan-500/10 transition-colors"></div>
 
-             <h2 className="text-xl font-bold text-white mb-2">AI Voice Interview</h2>
-             <p className="text-slate-400 text-sm mb-4">
-               Real-time verbal assessment. 20 adaptive questions. 30 minutes.
-               <span className="block mt-1 text-xs text-slate-500 font-mono">*Camera & Mic Required</span>
-             </p>
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-2 bg-slate-800 rounded-lg border border-slate-700 text-cyan-400 group-hover:text-cyan-300 group-hover:border-cyan-500/50 transition-colors">
+                <Mic size={24} />
+              </div>
+              <div className="flex gap-1">
+                <Video size={16} className="text-slate-500" />
+                <ShieldCheck size={16} className="text-slate-500" />
+              </div>
+            </div>
 
-             {!user.isPremium && (
-               <div className="mb-4 text-xs font-bold flex items-center gap-2">
-                 <div className="flex-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                   <div 
-                      className={`h-full ${interviewsUsed >= MAX_FREE_INTERVIEWS ? 'bg-red-500' : 'bg-cyan-500'}`} 
-                      style={{ width: `${Math.min(100, (interviewsUsed / MAX_FREE_INTERVIEWS) * 100)}%` }}
-                   ></div>
-                 </div>
-                 <span className={interviewsUsed >= MAX_FREE_INTERVIEWS ? 'text-red-400' : 'text-slate-400'}>
-                    {interviewsUsed}/{MAX_FREE_INTERVIEWS} Free
-                 </span>
-               </div>
-             )}
+            <h2 className="text-xl font-bold text-white mb-2">AI Voice Interview</h2>
+            <p className="text-slate-400 text-sm mb-4">
+              Real-time verbal assessment. 20 adaptive questions. 30 minutes.
+              <span className="block mt-1 text-xs text-slate-500 font-mono">*Camera & Mic Required</span>
+            </p>
 
-             <button 
-                onClick={handleStartInterviewClick}
-                className={`w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl border border-slate-600 hover:border-cyan-500/50 transition-all flex items-center justify-center gap-2 ${!canStartInterview ? 'opacity-50 cursor-not-allowed' : ''}`}
-             >
-                {canStartInterview ? 'Start Interview' : 'Limit Reached'} <Mic size={16} />
-             </button>
+            <button
+              onClick={handleStartInterviewClick}
+              className={`w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl border border-slate-600 hover:border-cyan-500/50 transition-all flex items-center justify-center gap-2 ${!canStartInterview ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              {canStartInterview ? 'Start Interview' : 'Limit Reached'} <Mic size={16} />
+            </button>
           </div>
 
           {/* Start New Trial Box */}
           <div className="bg-gradient-to-b from-slate-800 to-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl">
-            <h2 className="text-xl font-bold text-white mb-2">Start New Trial</h2>
-            
-            {!user.isPremium && (
-               <div className="mb-4 text-xs font-bold flex items-center gap-2">
-                 <div className="flex-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                   <div 
-                      className={`h-full ${trialsUsed >= MAX_FREE_TRIALS ? 'bg-red-500' : 'bg-green-500'}`} 
-                      style={{ width: `${Math.min(100, (trialsUsed / MAX_FREE_TRIALS) * 100)}%` }}
-                   ></div>
-                 </div>
-                 <span className={trialsUsed >= MAX_FREE_TRIALS ? 'text-red-400' : 'text-slate-400'}>
-                    {trialsUsed}/{MAX_FREE_TRIALS} Free
-                 </span>
-               </div>
-            )}
+            <h2 className="text-xl font-bold text-white mb-4">Start New Trial</h2>
 
             <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
               {Object.values(SkillDomain).map((domain) => (
@@ -468,13 +452,20 @@ export const Dashboard: React.FC<Props> = ({ user, onStartTrial }) => {
           </div>
 
           <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl p-6">
-             <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-widest mb-4">Recruiter Views</h3>
-             <div className="text-3xl font-bold text-white mb-1">{hasHistory ? 12 : 0}</div>
-             <p className="text-slate-500 text-sm mb-4">Companies viewed your profile this week.</p>
-             <button className="text-cyan-400 text-sm hover:underline">View Analytics &rarr;</button>
+            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-widest mb-4">Recruiter Views</h3>
+            <div className="text-3xl font-bold text-white mb-1">{hasHistory ? 12 : 0}</div>
+            <p className="text-slate-500 text-sm mb-4">Companies viewed your profile this week.</p>
+            <button className="text-cyan-400 text-sm hover:underline">View Analytics &rarr;</button>
           </div>
         </div>
       </div>
+
+      {showModeSelect && (
+        <GameModeSelector
+          onSelect={handleModeSelect}
+          onCancel={() => setShowModeSelect(false)}
+        />
+      )}
     </div>
   );
 };

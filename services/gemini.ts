@@ -6,52 +6,56 @@ import { SkillDomain, SkillDNAScore, AntiCheatLog, ExamMCQ, ExamTheory, ExamPrac
 let aiClient: GoogleGenAI | null = null;
 
 const getAiClient = () => {
-  if (!aiClient) {
-    const key = process.env.API_KEY || 'PLACEHOLDER_KEY'; 
-    aiClient = new GoogleGenAI({ apiKey: key });
-  }
-  return aiClient;
+    if (!aiClient) {
+        const env = (import.meta as any).env || (process as any).env || {};
+        const key = env.VITE_GEMINI_API_KEY;
+        if (!key) {
+            throw new Error("Missing VITE_GEMINI_API_KEY in environment variables.");
+        }
+        aiClient = new GoogleGenAI({ apiKey: key });
+    }
+    return aiClient;
 };
 
 // MODEL CONFIGURATION
-const FAST_MODEL = 'gemini-3-flash-preview';
-const PROCTOR_MODEL = 'gemini-flash-lite-latest'; // High speed, optimized for fast metadata extraction
-const REASONING_MODEL = 'gemini-3-pro-preview';
+const FAST_MODEL = 'gemini-2.0-flash';
+const PROCTOR_MODEL = 'gemini-2.0-flash-lite'; // High speed, optimized for fast metadata extraction
+const REASONING_MODEL = 'gemini-2.5-pro-preview-03-25';
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000): Promise<T> {
-  try {
-    return await fn();
-  } catch (error) {
-    if (retries <= 0) throw error;
-    await new Promise(r => setTimeout(r, delay));
-    return withRetry(fn, retries - 1, delay * 2);
-  }
+    try {
+        return await fn();
+    } catch (error) {
+        if (retries <= 0) throw error;
+        await new Promise(r => setTimeout(r, delay));
+        return withRetry(fn, retries - 1, delay * 2);
+    }
 }
 
 const cleanJson = (text: string | undefined): string => {
-  if (!text) return "{}";
-  let clean = text.replace(/```json/g, "").replace(/```/g, "");
-  return clean.trim();
+    if (!text) return "{}";
+    let clean = text.replace(/```json/g, "").replace(/```/g, "");
+    return clean.trim();
 };
 
 const parseResponse = (text: string | undefined) => {
-  try {
-    const cleaned = cleanJson(text);
-    return JSON.parse(cleaned);
-  } catch (e) {
-    console.error("Failed to parse AI response:", text);
-    return {};
-  }
+    try {
+        const cleaned = cleanJson(text);
+        return JSON.parse(cleaned);
+    } catch (e) {
+        console.error("Failed to parse AI response:", text);
+        return {};
+    }
 };
 
 // --- ROBOTIC PROCTORING SUITE ---
 
 export const analyzeEnvironmentSnapshot = async (
-  imageBase64: string
+    imageBase64: string
 ): Promise<{ lighting: boolean; singlePerson: boolean; noDevices: boolean; feedback: string }> => {
-  try {
-    const ai = getAiClient();
-    const prompt = `
+    try {
+        const ai = getAiClient();
+        const prompt = `
       Perform a security scan of this workspace. 
       Evaluate with high tolerance for budget hardware:
       1. lighting: BE HIGHLY LENIENT. Mark as true if the face is broadly discernible. Do not penalize for low-quality sensors, grain, or low-light shadows typical of budget devices.
@@ -61,49 +65,65 @@ export const analyzeEnvironmentSnapshot = async (
       Output JSON only.
     `;
 
-    const base64Data = imageBase64.replace(/^data:image\/(png|jpeg|jpg);base64,/, "");
+        const base64Data = imageBase64.replace(/^data:image\/(png|jpeg|jpg);base64,/, "");
 
-    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-      model: PROCTOR_MODEL,
-      contents: {
-        parts: [
-          { inlineData: { mimeType: "image/jpeg", data: base64Data } },
-          { text: prompt }
-        ]
-      },
-      config: {
-        temperature: 0.1,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-             lighting: { type: Type.BOOLEAN },
-             singlePerson: { type: Type.BOOLEAN },
-             noDevices: { type: Type.BOOLEAN },
-             feedback: { type: Type.STRING }
-          },
-          required: ["lighting", "singlePerson", "noDevices", "feedback"]
-        }
-      }
-    }), 2, 2000);
-    
-    return parseResponse(response.text);
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+            model: PROCTOR_MODEL,
+            contents: {
+                parts: [
+                    { inlineData: { mimeType: "image/jpeg", data: base64Data } },
+                    { text: prompt }
+                ]
+            },
+            config: {
+                temperature: 0.1,
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        lighting: { type: Type.BOOLEAN },
+                        singlePerson: { type: Type.BOOLEAN },
+                        noDevices: { type: Type.BOOLEAN },
+                        feedback: { type: Type.STRING }
+                    },
+                    required: ["lighting", "singlePerson", "noDevices", "feedback"]
+                }
+            }
+        }), 2, 2000);
 
-  } catch (error) {
-    console.error("Proctoring Check Failed:", error);
-    // Graceful fallback: Allow entry but flag for review in real-world scenarios
-    return {
-      lighting: true,
-      singlePerson: true,
-      noDevices: true,
-      feedback: "Verification bypass active due to temporary engine latency."
-    };
-  }
+        return parseResponse(response.text);
+
+    } catch (error) {
+        console.error("Proctoring Check Failed:", error);
+        // Graceful fallback: Allow entry but flag for review in real-world scenarios
+        return {
+            lighting: true,
+            singlePerson: true,
+            noDevices: true,
+            feedback: "Verification bypass active due to temporary engine latency."
+        };
+    }
 };
 
 // --- SKILL TRIAL ---
 
-export const generateSkillTrial = async (domain: SkillDomain): Promise<{ questions: {id: number, text: string, category: 'Practical' | 'Concept'}[], constraints: string[] }> => {
+const BACKUP_QUESTION = {
+    questions: [
+        { id: 1, text: "Implement a function to reverse a linked list.", category: "Practical" as const },
+        { id: 2, text: "Explain the time complexity of QuickSort in the worst case and how to mitigate it.", category: "Concept" as const },
+        { id: 3, text: "Design an LRU Cache with O(1) operations.", category: "Practical" as const },
+        { id: 4, text: "Describe the differences between TCP and UDP.", category: "Concept" as const },
+        { id: 5, text: "Write an algorithm to detect a cycle in a directed graph.", category: "Practical" as const },
+        { id: 6, text: "What is eventual consistency in distributed systems?", category: "Concept" as const },
+        { id: 7, text: "Implement a rate limiter using the token bucket algorithm.", category: "Practical" as const },
+        { id: 8, text: "Explain how React's Virtual DOM works.", category: "Concept" as const },
+        { id: 9, text: "Write a SQL query to find the second highest salary from an Employee table.", category: "Practical" as const },
+        { id: 10, text: "Compare and contrast horizontal vs vertical scaling.", category: "Concept" as const }
+    ],
+    constraints: ["Do not use external libraries", "Optimize for time complexity O(N)", "Explain all tradeoffs"]
+};
+
+export const generateSkillTrial = async (domain: SkillDomain): Promise<{ questions: { id: number, text: string, category: 'Practical' | 'Concept' }[], constraints: string[] }> => {
     const ai = getAiClient();
     const prompt = `Generate a highly competitive senior-level technical trial for ${domain}.
     The trial must consist of exactly 10 questions:
@@ -111,8 +131,8 @@ export const generateSkillTrial = async (domain: SkillDomain): Promise<{ questio
     - 5 Concept Questions: Focus on deep theoretical understanding, internals, and architectural trade-offs.
     The questions should be very difficult and aimed at distinguish between senior and staff level engineers.
     Output JSON only.`;
-    
-    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+
+    const apiCall = withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: FAST_MODEL,
         contents: prompt,
         config: {
@@ -141,7 +161,20 @@ export const generateSkillTrial = async (domain: SkillDomain): Promise<{ questio
             }
         }
     }));
-    return parseResponse(response.text);
+
+    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
+
+    try {
+        const response = await Promise.race([apiCall, timeout]);
+        if (!response) {
+            console.warn("API Timeout (5s) hit. Returning BACKUP_QUESTION.");
+            return BACKUP_QUESTION;
+        }
+        return parseResponse(response.text);
+    } catch (e) {
+        console.error("API Error hit. Returning BACKUP_QUESTION.");
+        return BACKUP_QUESTION;
+    }
 };
 
 export const evaluatePerformance = async (
@@ -189,7 +222,7 @@ export const evaluatePerformance = async (
 export const generateExamMCQs = async (domain: SkillDomain): Promise<ExamMCQ[]> => {
     const ai = getAiClient();
     const prompt = `Generate 10 high-difficulty technical MCQs for ${domain}.`;
-    
+
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: FAST_MODEL,
         contents: prompt,
@@ -205,7 +238,7 @@ export const generateExamMCQs = async (domain: SkillDomain): Promise<ExamMCQ[]> 
                             properties: {
                                 id: { type: Type.INTEGER },
                                 question: { type: Type.STRING },
-                                options: { 
+                                options: {
                                     type: Type.ARRAY,
                                     items: { type: Type.STRING }
                                 },
@@ -224,10 +257,10 @@ export const generateExamMCQs = async (domain: SkillDomain): Promise<ExamMCQ[]> 
 };
 
 export const generateExamTheory = async (domain: SkillDomain): Promise<ExamTheory[]> => {
-     const ai = getAiClient();
-     const prompt = `Generate 10 architectural theory questions for ${domain}.`;
-     
-     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+    const ai = getAiClient();
+    const prompt = `Generate 10 architectural theory questions for ${domain}.`;
+
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: FAST_MODEL,
         contents: prompt,
         config: {
@@ -258,7 +291,7 @@ export const generateExamTheory = async (domain: SkillDomain): Promise<ExamTheor
 export const generateExamPractical = async (domain: SkillDomain): Promise<ExamPractical[]> => {
     const ai = getAiClient();
     const prompt = `Generate 5 expert coding tasks for ${domain}.`;
-    
+
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: FAST_MODEL,
         contents: prompt,
@@ -274,7 +307,7 @@ export const generateExamPractical = async (domain: SkillDomain): Promise<ExamPr
                             properties: {
                                 id: { type: Type.INTEGER },
                                 task: { type: Type.STRING },
-                                constraints: { 
+                                constraints: {
                                     type: Type.ARRAY,
                                     items: { type: Type.STRING }
                                 }
@@ -318,10 +351,10 @@ export const gradeExamSections = async (domain: SkillDomain, theory: ExamTheory[
 // --- INTERVIEW (DYNAMIC) ---
 
 export const generateInterviewQuestion = async (domain: SkillDomain, lastScore: number, roundNum: number): Promise<{ text: string, timeLimit: number }> => {
-     const ai = getAiClient();
-     const prompt = `Generate interview Q#${roundNum} for ${domain}.`;
-     
-     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+    const ai = getAiClient();
+    const prompt = `Generate interview Q#${roundNum} for ${domain}.`;
+
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: FAST_MODEL,
         contents: prompt,
         config: {
@@ -342,7 +375,7 @@ export const generateInterviewQuestion = async (domain: SkillDomain, lastScore: 
 export const evaluateInterviewResponse = async (domain: SkillDomain, question: string, answer: string): Promise<{ score: number, feedback: string, spokenFeedback: string }> => {
     const ai = getAiClient();
     const prompt = `Evaluate interview answer. Q: ${question} A: ${answer}`;
-    
+
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: FAST_MODEL,
         contents: prompt,
@@ -397,10 +430,10 @@ export const generateChallengeScenario = async (domain: SkillDomain): Promise<{ 
     return parseResponse(response.text);
 };
 
-export const validateChallengeStep = async (domain: SkillDomain, stepTitle: string, code: string): Promise<{ success: boolean, score: number, feedback: string }> => {
+export const validateChallengeStep = async (domain: SkillDomain, stepTitle: string, code: string, originalLogic?: string): Promise<{ success: boolean, score: number, feedback: string }> => {
     const ai = getAiClient();
-    const prompt = `Validate logic for ${stepTitle}. Code: ${code}`;
-    
+    const prompt = `Validate logic for ${stepTitle}. Code: ${code}. ${originalLogic ? "Evaluate strictly against this original LeetCode requirement: " + originalLogic : ""}`;
+
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: FAST_MODEL,
         contents: prompt,

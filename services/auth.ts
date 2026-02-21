@@ -1,7 +1,6 @@
-
 import { User } from '../types';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, signInAnonymously } from 'firebase/auth';
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, signInAnonymously, GoogleAuthProvider, OAuthProvider, signInWithPopup } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
 
 // ------------------------------------------------------------------
@@ -9,14 +8,16 @@ import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
 // ------------------------------------------------------------------
 
 // Explicit configuration to prevent "auth/configuration-not-found"
+const env = (import.meta as any).env || (process as any).env || {};
+
 const firebaseConfig = {
-  apiKey: "AIzaSyDiOvJOXrHGA6kOWyl3Hw7RfvIKncvc4HM",
-  authDomain: "psn-network.firebaseapp.com",
-  projectId: "psn-network",
-  storageBucket: "psn-network.firebasestorage.app",
-  messagingSenderId: "655713305273",
-  appId: "1:655713305273:web:23fde8d6696855e97b5168",
-  measurementId: "G-QL171SGDNY"
+  apiKey: env.VITE_FIREBASE_API_KEY,
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: env.VITE_FIREBASE_APP_ID,
+  measurementId: env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 let auth: any;
@@ -24,8 +25,8 @@ let db: any;
 let isBackendReady = false;
 
 // Robust check: Firebase Auth requires apiKey, authDomain, and projectId at minimum.
-const isConfigValid = 
-  !!firebaseConfig.apiKey && 
+const isConfigValid =
+  !!firebaseConfig.apiKey &&
   firebaseConfig.apiKey !== 'YOUR_API_KEY' &&
   !!firebaseConfig.authDomain &&
   !!firebaseConfig.projectId;
@@ -53,6 +54,8 @@ if (isConfigValid) {
 export interface AuthService {
   login(email: string, password: string): Promise<User>;
   register(email: string, password: string): Promise<User>;
+  loginWithGoogle(): Promise<User>;
+  loginWithApple(): Promise<User>;
   loginAsGuest(): Promise<User>;
   logout(): Promise<void>;
   updateUser(user: User): Promise<void>;
@@ -118,58 +121,136 @@ const firebaseService: AuthService = {
       // Store profile in Firestore
       await setDoc(doc(db, "users", firebaseUser.uid), newUser);
     } catch (error: any) {
-       console.warn("Firestore Write Error (Register): Profile creation failed, but Auth succeeded.", error.code);
+      console.warn("Firestore Write Error (Register): Profile creation failed, but Auth succeeded.", error.code);
     }
-    
+
     return { ...newUser, isAuthenticated: true };
+  },
+
+  async loginWithGoogle(): Promise<User> {
+    const provider = new GoogleAuthProvider();
+    const result = await signInWithPopup(auth, provider);
+    const firebaseUser = result.user;
+
+    const email = firebaseUser.email || '';
+
+    const defaultUser: User = {
+      id: firebaseUser.uid,
+      email: email,
+      name: firebaseUser.displayName || '',
+      username: email.split('@')[0] || `user_${firebaseUser.uid.substring(0, 6)}`,
+      isPremium: false,
+      avatar: firebaseUser.photoURL || '',
+      isOnboarded: false, // Assume false initially so they complete setup
+      isAuthenticated: true,
+      history: [],
+      skills: []
+    };
+
+    try {
+      const docRef = doc(db, "users", firebaseUser.uid);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const userData = docSnap.data() as User;
+        return { ...userData, isAuthenticated: true };
+      } else {
+        // First time Google login = Auto register
+        await setDoc(docRef, defaultUser);
+        return defaultUser;
+      }
+    } catch (error: any) {
+      console.warn("Firestore Read/Write Error (Google Login):", error.code);
+    }
+    return defaultUser;
+  },
+
+  async loginWithApple(): Promise<User> {
+    const provider = new OAuthProvider('apple.com');
+    provider.addScope('email');
+    provider.addScope('name');
+
+    const result = await signInWithPopup(auth, provider);
+    const firebaseUser = result.user;
+
+    const email = firebaseUser.email || '';
+
+    const defaultUser: User = {
+      id: firebaseUser.uid,
+      email: email,
+      name: firebaseUser.displayName || 'Apple User',
+      username: email ? email.split('@')[0] : `user_${firebaseUser.uid.substring(0, 6)}`,
+      isPremium: false,
+      avatar: firebaseUser.photoURL || '',
+      isOnboarded: false,
+      isAuthenticated: true,
+      history: [],
+      skills: []
+    };
+
+    try {
+      const docRef = doc(db, "users", firebaseUser.uid);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const userData = docSnap.data() as User;
+        return { ...userData, isAuthenticated: true };
+      } else {
+        await setDoc(docRef, defaultUser);
+        return defaultUser;
+      }
+    } catch (error: any) {
+      console.warn("Firestore Read/Write Error (Apple Login):", error.code);
+    }
+    return defaultUser;
   },
 
   async loginAsGuest(): Promise<User> {
     try {
-        const userCredential = await signInAnonymously(auth);
-        const firebaseUser = userCredential.user;
-        
-        const guestUser: User = {
-            id: firebaseUser.uid,
-            name: 'Guest Explorer',
-            username: `guest_${firebaseUser.uid.substring(0,6)}`,
-            email: '',
-            isPremium: false,
-            avatar: '',
-            isOnboarded: true,
-            isAuthenticated: true,
-            history: [],
-            skills: ['Explorer'],
-            bio: 'Just exploring the platform.'
-        };
-        
-        // Try to save guest profile so other parts of the app can read it (optional)
-        try {
-            await setDoc(doc(db, "users", firebaseUser.uid), guestUser);
-        } catch (e) {
-            console.warn("Could not save guest profile to DB (likely permissions), continuing with Auth only.");
-        }
-        
-        return guestUser;
+      const userCredential = await signInAnonymously(auth);
+      const firebaseUser = userCredential.user;
+
+      const guestUser: User = {
+        id: firebaseUser.uid,
+        name: 'Guest Explorer',
+        username: `guest_${firebaseUser.uid.substring(0, 6)}`,
+        email: '',
+        isPremium: false,
+        avatar: '',
+        isOnboarded: true,
+        isAuthenticated: true,
+        history: [],
+        skills: ['Explorer'],
+        bio: 'Just exploring the platform.'
+      };
+
+      // Try to save guest profile so other parts of the app can read it (optional)
+      try {
+        await setDoc(doc(db, "users", firebaseUser.uid), guestUser);
+      } catch (e) {
+        console.warn("Could not save guest profile to DB (likely permissions), continuing with Auth only.");
+      }
+
+      return guestUser;
     } catch (error: any) {
-        console.warn("Firebase Anonymous Auth Failed (likely disabled in console). Falling back to Offline Guest.", error.code);
-        
-        // Fallback: Generate a local offline guest user
-        // This ensures the user can still enter the app even if Firebase Auth is strict
-        const guestId = 'offline_guest_' + Date.now().toString(36);
-        return {
-            id: guestId,
-            name: 'Guest (Offline)',
-            username: 'guest',
-            email: '',
-            isPremium: false,
-            avatar: '',
-            isOnboarded: true,
-            isAuthenticated: true,
-            history: [],
-            skills: ['Explorer'],
-            bio: 'Offline Mode'
-        };
+      console.warn("Firebase Anonymous Auth Failed (likely disabled in console). Falling back to Offline Guest.", error.code);
+
+      // Fallback: Generate a local offline guest user
+      // This ensures the user can still enter the app even if Firebase Auth is strict
+      const guestId = 'offline_guest_' + Date.now().toString(36);
+      return {
+        id: guestId,
+        name: 'Guest (Offline)',
+        username: 'guest',
+        email: '',
+        isPremium: false,
+        avatar: '',
+        isOnboarded: true,
+        isAuthenticated: true,
+        history: [],
+        skills: ['Explorer'],
+        bio: 'Offline Mode'
+      };
     }
   },
 
@@ -179,11 +260,11 @@ const firebaseService: AuthService = {
 
   async updateUser(user: User): Promise<void> {
     if (!user.id) return;
-    
+
     // Handle Offline Guest
     if (user.id.startsWith('offline_guest_')) {
-        // No-op or save to localstorage could happen here if we wanted persistence
-        return;
+      // No-op or save to localstorage could happen here if we wanted persistence
+      return;
     }
 
     try {
@@ -196,29 +277,29 @@ const firebaseService: AuthService = {
   },
 
   onAuthStateChange(callback: (user: User | null) => void): () => void {
-    if (!auth) return () => {};
-    
+    if (!auth) return () => { };
+
     return onAuthStateChanged(auth, async (firebaseUser: any) => {
       if (firebaseUser) {
         try {
           const docRef = doc(db, "users", firebaseUser.uid);
           const docSnap = await getDoc(docRef);
-          
+
           if (docSnap.exists()) {
             callback({ ...docSnap.data(), isAuthenticated: true } as User);
           } else {
-             // Fallback for anonymous users or missing profiles
-             callback({
-                id: firebaseUser.uid,
-                email: firebaseUser.email || '',
-                name: firebaseUser.displayName || 'Guest',
-                username: (firebaseUser.email || '').split('@')[0] || 'guest',
-                isPremium: false,
-                avatar: firebaseUser.photoURL || '',
-                isOnboarded: !firebaseUser.isAnonymous ? false : true, // Guests skip onboarding
-                isAuthenticated: true,
-                history: []
-              } as User);
+            // Fallback for anonymous users or missing profiles
+            callback({
+              id: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              name: firebaseUser.displayName || 'Guest',
+              username: (firebaseUser.email || '').split('@')[0] || 'guest',
+              isPremium: false,
+              avatar: firebaseUser.photoURL || '',
+              isOnboarded: !firebaseUser.isAnonymous ? false : true, // Guests skip onboarding
+              isAuthenticated: true,
+              history: []
+            } as User);
           }
         } catch (error) {
           console.warn("Firestore Read Error (AuthChange): Using fallback auth user.", error);
@@ -255,7 +336,7 @@ interface StoredUser extends User {
 
 const mockService: AuthService = {
   async login(email: string, password: string): Promise<User> {
-    await new Promise(resolve => setTimeout(resolve, DELAY_MS)); 
+    await new Promise(resolve => setTimeout(resolve, DELAY_MS));
 
     const dbLocal = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
     const user = dbLocal[email] as StoredUser | undefined;
@@ -278,7 +359,7 @@ const mockService: AuthService = {
     await new Promise(resolve => setTimeout(resolve, DELAY_MS));
 
     const dbLocal = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-    
+
     if (dbLocal[email]) {
       throw new Error("User already exists with this email.");
     }
@@ -304,25 +385,38 @@ const mockService: AuthService = {
     return { ...safeUser, isAuthenticated: true };
   },
 
+  async loginWithGoogle(): Promise<User> {
+    await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+    const mockEmail = `demo.google.${Date.now()}@example.com`;
+    // Treat as instant register & login
+    return this.register(mockEmail, 'mock_google_pwd_123');
+  },
+
+  async loginWithApple(): Promise<User> {
+    await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+    const mockEmail = `demo.apple.${Date.now()}@example.com`;
+    return this.register(mockEmail, 'mock_apple_pwd_123');
+  },
+
   async loginAsGuest(): Promise<User> {
-      await new Promise(resolve => setTimeout(resolve, DELAY_MS));
-      const guestId = 'guest_' + Date.now();
-      const guestUser: User = {
-          id: guestId,
-          name: 'Guest Explorer',
-          username: 'guest',
-          email: '',
-          isPremium: false,
-          avatar: '',
-          isOnboarded: true,
-          isAuthenticated: true,
-          history: [],
-          skills: ['Explorer'],
-          bio: 'Just exploring.'
-      };
-      localStorage.setItem(SESSION_KEY, 'GUEST_MODE');
-      localStorage.setItem('psn_guest_data', JSON.stringify(guestUser));
-      return guestUser;
+    await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+    const guestId = 'guest_' + Date.now();
+    const guestUser: User = {
+      id: guestId,
+      name: 'Guest Explorer',
+      username: 'guest',
+      email: '',
+      isPremium: false,
+      avatar: '',
+      isOnboarded: true,
+      isAuthenticated: true,
+      history: [],
+      skills: ['Explorer'],
+      bio: 'Just exploring.'
+    };
+    localStorage.setItem(SESSION_KEY, 'GUEST_MODE');
+    localStorage.setItem('psn_guest_data', JSON.stringify(guestUser));
+    return guestUser;
   },
 
   async logout(): Promise<void> {
@@ -334,10 +428,10 @@ const mockService: AuthService = {
   async updateUser(user: User): Promise<void> {
     // If it's a guest, update guest data
     if (user.id.startsWith('guest')) {
-         localStorage.setItem('psn_guest_data', JSON.stringify(user));
-         return;
+      localStorage.setItem('psn_guest_data', JSON.stringify(user));
+      return;
     }
-    
+
     if (!user.email) return;
     await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -355,11 +449,11 @@ const mockService: AuthService = {
     // Check for guest session first
     const session = localStorage.getItem(SESSION_KEY);
     if (session === 'GUEST_MODE') {
-        const guestData = localStorage.getItem('psn_guest_data');
-        if (guestData) {
-            callback(JSON.parse(guestData));
-            return () => {};
-        }
+      const guestData = localStorage.getItem('psn_guest_data');
+      if (guestData) {
+        callback(JSON.parse(guestData));
+        return () => { };
+      }
     }
 
     if (session) {
@@ -374,7 +468,7 @@ const mockService: AuthService = {
     } else {
       callback(null);
     }
-    return () => {};
+    return () => { };
   }
 };
 
