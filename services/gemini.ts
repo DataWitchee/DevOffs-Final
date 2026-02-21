@@ -310,11 +310,13 @@ export const evaluateCodeSubmission = async (
 
 export const simulateExecution = async (
     code: string,
-    language: string
+    language: string,
+    problemText?: string
 ): Promise<{ stdout: string; time: number; memory: number; complexity: string }> => {
     const ai = getAiClient();
     const prompt = `You are a high-performance ${language} code execution engine.
     Dry run the following code and predict its standard output exactly as a compiler would print it.
+    ${problemText ? `The code is an attempt to solve this problem:\n${problemText}\n\nPlease run the code against the problem's implied test cases. In your standard output prediction, explicitly print an "Expected Output" vs "Actual Output" section so the user can see if their tests passed.` : ''}
     If there is a syntax error, return the compiler error in the stdout field.
     Provide realistic estimated execution time in ms (e.g. 5) and memory in bytes (e.g. 10240).
     Provide Big O time complexity as well (e.g. O(N)).

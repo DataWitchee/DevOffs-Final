@@ -72,8 +72,17 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
     setShowReview({ visible: false, logs: [] });
 
     try {
-      const codeToRun = answers[`${currentQ?.id}_${language}`] || getLanguageBoilerplate(language, currentQ?.starterCode || "");
-      const data = await simulateExecution(codeToRun, language);
+      const userCode = answers[`${currentQ?.id}_${language}`] || "";
+      const boilerplate = getLanguageBoilerplate(language, currentQ?.starterCode || "");
+
+      if (!userCode.trim() || userCode.trim() === boilerplate.trim()) {
+        setConsoleOutput({ stdout: "Compilation Error: No code provided.\nPlease write your solution before running tests.", time: 0, memory: 0, complexity: "N/A" });
+        setIsCompiling(false);
+        return;
+      }
+
+      const codeToRun = userCode;
+      const data = await simulateExecution(codeToRun, language, currentQ?.text);
 
       // Predict Time Complexity
       const complexities = ["O(1)", "O(log N)", "O(N)", "O(N log N)", "O(N^2)"];
@@ -266,6 +275,14 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
 
     try {
       const userCode = answers[`${currentQ?.id}_${language}`] || "";
+      const boilerplate = getLanguageBoilerplate(language, currentQ?.starterCode || "");
+
+      if (!userCode.trim() || userCode.trim() === boilerplate.trim()) {
+        setAdaptiveFeedback("AI Evaluation Failed: No code provided.\nPlease write your solution before submitting.");
+        setIsEvaluating(false);
+        return;
+      }
+
       const result = await evaluateCodeSubmission(domain, currentQ?.text || "", userCode, language);
 
       setCumulativeScore(result.score);
