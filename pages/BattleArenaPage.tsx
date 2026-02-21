@@ -1,26 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
-import { Clock, Code2, Cpu } from 'lucide-react';
-import { useGhostOpponent } from '../hooks/useGhostOpponent';
+import { Clock, Code2, Cpu, Play, CheckCircle, ShieldCheck, XCircle } from 'lucide-react';
+import { localQuestions } from '../data/LocalQuestions';
 
-const TARGET_CODE = `function reverseLinkedList(head) {
-  let prev = null;
-  let current = head;
-  
-  while (current !== null) {
-      let nextNode = current.next;
-      current.next = prev;
-      prev = current;
-      current = nextNode;
-  }
-  
-  return prev;
-}`;
+// Grab the first DSA algorithm question dynamically
+const activeQuestion = localQuestions.find(q => q.category === 'DSA') || localQuestions[0];
+const TARGET_CODE = activeQuestion.starterCode || "";
 
 export const BattleArenaPage: React.FC = () => {
-  const [userCode, setUserCode] = useState('// Your solution\nfunction reverseLinkedList(head) {\n\n}');
+  const [language, setLanguage] = useState<'javascript' | 'python' | 'cpp' | 'java' | 'plaintext'>('javascript');
+  const [userCode, setUserCode] = useState(TARGET_CODE);
   const [userProgress, setUserProgress] = useState(0);
   const [timeLeft, setTimeLeft] = useState(300); // 5 minutes
+
+  // Mock Runner State
+  const [isCompiling, setIsCompiling] = useState(false);
+  const [showReview, setShowReview] = useState<{ visible: boolean, logs: string[] }>({ visible: false, logs: [] });
 
   // MOCK SOCKET: Simulate opponent progress every 5 seconds
   const [ghostProgress, setGhostProgress] = useState(0);
@@ -61,6 +56,56 @@ export const BattleArenaPage: React.FC = () => {
   };
 
   const isLowTime = timeLeft < 60;
+
+  // Handle Mock Runner
+  const handleRunTests = () => {
+    setIsCompiling(true);
+    setShowReview({ visible: false, logs: [] });
+
+    setTimeout(() => {
+      setIsCompiling(false);
+
+      if (language === 'plaintext') {
+        setShowReview({
+          visible: true,
+          logs: [
+            "[SYSTEM] Validating Pseudo Code Logic...",
+            "✅ Structure Verified",
+            "✅ Logic Flows Validated",
+            "[SUCCESS] Conceptual solution approved."
+          ]
+        });
+        return;
+      }
+
+      // Basic length check for mock validation
+      const isLongEnough = userCode.length > TARGET_CODE.length - 20;
+
+      if (isLongEnough) {
+        setShowReview({
+          visible: true,
+          logs: [
+            "[SYSTEM] Compiling solution...",
+            "✅ Test Case 1 Passed",
+            "✅ Test Case 2 Passed",
+            "✅ Test Case 3 Passed (Hidden Limits)",
+            "[SUCCESS] Verification Complete."
+          ]
+        });
+        setUserProgress(100);
+      } else {
+        setShowReview({
+          visible: true,
+          logs: [
+            "[SYSTEM] Compiling solution...",
+            "❌ Test Case 1 FAILED: Output mismatch",
+            "❌ Test Case 2 FAILED",
+            "[ERROR] Review logic and try again."
+          ]
+        });
+      }
+    }, 1500);
+  };
 
   return (
     <div className="h-screen w-full bg-slate-950 text-slate-200 font-sans flex flex-col overflow-hidden selection:bg-cyan-900">
@@ -110,13 +155,43 @@ export const BattleArenaPage: React.FC = () => {
 
       </div>
 
-      {/* 2. SPLIT SCREEN EDITORS */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* 2. QUESTION HUD */}
+      <div className="bg-slate-900 border-b border-slate-800 p-4 shrink-0 flex gap-6">
+        <div className="flex-1">
+          <h2 className="text-white font-bold mb-2">{activeQuestion.questionText.split('\n')[0].replace('### ', '')}</h2>
+          <p className="text-sm text-slate-400 whitespace-pre-wrap">{activeQuestion.questionText.split('\n').slice(1).join('\n')}</p>
+        </div>
+        <div className="w-1/3 bg-slate-950 p-4 rounded-lg border border-slate-800 self-start">
+          <div className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Test Cases</div>
+          <div className="font-mono text-xs text-slate-400 space-y-2">
+            {activeQuestion.testCases?.slice(0, 2).map((tc, idx) => (
+              <div key={idx}>
+                <div><span className="text-cyan-500">Input:</span> {tc.input}</div>
+                <div><span className="text-green-500">Output:</span> {tc.expectedOutput}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* 3. SPLIT SCREEN EDITORS */}
+      <div className="flex-1 flex overflow-hidden relative">
 
         {/* User Editor */}
         <div className="flex-1 flex flex-col border-r border-slate-800 relative group">
-          <div className="h-8 shrink-0 bg-[#1e1e1e] flex items-center px-4 font-mono text-xs text-cyan-400/70 border-b border-slate-800 z-10">
-            solution.js
+          <div className="h-12 shrink-0 bg-[#1e1e1e] flex items-center justify-between px-4 border-b border-slate-800 z-10">
+            <div className="font-mono text-xs text-cyan-400/70">solution.{language === 'javascript' ? 'js' : language === 'python' ? 'py' : language === 'cpp' ? 'cpp' : language === 'java' ? 'java' : 'txt'}</div>
+            <select
+              className="bg-slate-800 text-xs text-slate-200 border border-slate-700 rounded px-2 py-1 outline-none"
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as any)}
+            >
+              <option value="cpp">C++</option>
+              <option value="python">Python</option>
+              <option value="java">Java</option>
+              <option value="javascript">JavaScript</option>
+              <option value="plaintext">Pseudo Code</option>
+            </select>
           </div>
           {/* Cyberpunk Glow border element */}
           <div className="absolute inset-0 border-2 border-transparent group-focus-within:border-cyan-500/30 group-focus-within:shadow-[inset_0_0_20px_rgba(6,182,212,0.1)] pointer-events-none z-10 transition-all duration-500" />
@@ -124,7 +199,7 @@ export const BattleArenaPage: React.FC = () => {
           <div className="flex-1 relative">
             <Editor
               height="100%"
-              defaultLanguage="javascript"
+              language={language}
               theme="vs-dark"
               value={userCode}
               onChange={(val) => setUserCode(val || '')}
@@ -164,6 +239,44 @@ export const BattleArenaPage: React.FC = () => {
               }}
             />
           </div>
+        </div>
+      </div>
+
+      {/* 4. RUN / SUBMIT CONTROLS */}
+      <div className="h-16 shrink-0 bg-slate-900 border-t border-slate-800 flex items-center justify-between px-6 z-10 w-full">
+        {showReview.visible && (
+          <div className="absolute right-6 bottom-20 bg-slate-800 rounded-lg border border-indigo-500/50 p-4 shadow-xl z-20 w-80">
+            <h4 className="text-white font-bold mb-2 flex items-center gap-2">
+              <ShieldCheck className="text-indigo-400" size={16} /> Run Report
+            </h4>
+            <div className="space-y-1 font-mono text-xs">
+              {showReview.logs.map((log, i) => (
+                <div key={i} className={log.includes('FAIL') ? 'text-red-400' : 'text-green-400'}>{log}</div>
+              ))}
+            </div>
+            <button
+              onClick={() => setShowReview({ visible: false, logs: [] })}
+              className="absolute top-2 right-2 text-slate-400 hover:text-white"
+            >
+              <XCircle size={16} />
+            </button>
+          </div>
+        )}
+
+        <div className="flex gap-4 ml-auto">
+          <button
+            disabled={isCompiling}
+            onClick={handleRunTests}
+            className={`px-6 py-2 rounded-lg font-bold flex items-center gap-2 transition-all ${isCompiling ? 'bg-slate-700 text-slate-400' : 'bg-slate-700 hover:bg-slate-600 text-white'}`}
+          >
+            {isCompiling ? 'Compiling...' : <><Play size={16} /> Run Tests</>}
+          </button>
+          <button
+            onClick={handleRunTests}
+            className="bg-green-600 hover:bg-green-500 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 transition-all shadow-lg shadow-green-900/20"
+          >
+            Submit Verification <CheckCircle size={16} />
+          </button>
         </div>
       </div>
     </div>
