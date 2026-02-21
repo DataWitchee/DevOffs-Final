@@ -168,7 +168,7 @@ export const generateSkillTrial = async (domain: SkillDomain): Promise<{ questio
         }
     }));
 
-    const timeout = new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000));
+    const timeout = new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 15000));
 
     const response = await Promise.race([apiCall, timeout]);
     if (!response) {
@@ -258,7 +258,7 @@ export const generateAdaptiveQuestion = async (
         }
     }));
 
-    const timeout = new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 4000));
+    const timeout = new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 15000));
     const response = await Promise.race([apiCall, timeout]);
     if (!response) throw new Error("API Timeout");
 
