@@ -62,7 +62,8 @@ export const ExamRoom: React.FC<Props> = ({ user, onUpdateUser }) => {
       5000
    );
 
-   const isUnauthorized = identity.status === 'UNAUTHORIZED_USER';
+   // Demo Bypass: Disable Identity Check
+   const isUnauthorized = false;
 
    useEffect(() => {
       // Demo Bypass: Always grant Exam Access
