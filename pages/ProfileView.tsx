@@ -130,7 +130,7 @@ export const ProfileView: React.FC<Props> = ({ user }) => {
               </div>
               <div className="flex items-center gap-3 text-sm text-slate-400">
                 <Calendar size={16} />
-                <span>Joined Oct 2023</span>
+                <span>Joined {(user as any).createdAt ? new Date((user as any).createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>
               </div>
 
               {user.isPremium && (
