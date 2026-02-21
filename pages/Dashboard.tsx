@@ -363,9 +363,9 @@ export const Dashboard: React.FC<Props> = ({ user, onStartTrial }) => {
 
               <button
                 onClick={() => navigate('/exam')}
-                className="w-full py-4 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white font-bold rounded-xl shadow-lg shadow-orange-900/20 transition-all flex items-center justify-center gap-2"
+                className="w-full py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-green-900/20 transition-all flex items-center justify-center gap-2"
               >
-                Enter Exam Hall <Award size={18} />
+                Enter Exam Hall (Unlocked) <Award size={18} />
               </button>
             </div>
           </div>
