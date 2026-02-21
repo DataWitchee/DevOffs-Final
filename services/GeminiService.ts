@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { localQuestions } from "../data/LocalQuestions.js";
+import { localQuestions } from "../data/LocalQuestions.ts";
 
 export class GeminiService {
     private ai: GoogleGenAI;
