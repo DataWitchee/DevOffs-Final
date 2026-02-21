@@ -38,65 +38,10 @@ export interface User {
 }
 
 export enum SkillDomain {
-  // Legacy / Web
-  FRONTEND = "Frontend Engineering",
-  BACKEND = "Backend Architecture",
-  FULLSTACK = "Full Stack Development",
-  ALGORITHMS = "Algorithms & Data Structures",
-  MOBILE = "Mobile App Development",
-  DEVOPS = "DevOps",
-  CLOUD = "Cloud Infrastructure",
-  QA = "QA & Automation",
-  DATABASE = "Database Engineering",
-  NETWORK = "Network Engineering",
-  UI_UX = "UI/UX Design",
-  PRODUCT = "Product Management",
-  SECURITY = "Cybersecurity & InfoSec",
-  BLOCKCHAIN = "Blockchain & Web3",
-
-  // Tier 1: Core Systems & Data
-  SYSTEMS_PROG = "Systems Programming",
-  DISTRIBUTED_SYS = "Distributed Systems",
-  SW_ARCH = "Software Architecture",
-  API_DESIGN = "API Design & Integration",
-  PLATFORM_ENG = "Platform Engineering",
-  SRE = "Site Reliability Engineering",
-  DATA_ENG = "Data Engineering",
-  DECISION_SCI = "Decision Science / OR",
-  ML_ENG = "Machine Learning Engineering",
-  MLOPS = "AI Infrastructure / MLOps",
-
-  // Tier 2: Specialized & Real-Time
-  ROBOTICS = "Robotics Software",
-  EDGE_COMP = "Real-Time / Edge Computing",
-  AUTONOMOUS_SYS = "Autonomous Systems",
-  GAME_DEV = "Game Engine & Graphics", // Renamed from Game Development for specificity
-  CONTROL_SYS = "Control Systems / Embedded", // Merged with Embedded
-
-  // Tier 3: Physical & Specialized Engineering
-  CIVIL = "Civil Engineering",
-  MECHANICAL = "Mechanical Engineering",
-  CHEMICAL = "Chemical Engineering",
-  BIOMEDICAL = "Biomedical Engineering",
-  AEROSPACE = "Aerospace Engineering",
-  ELECTRICAL = "Electrical Engineering",
-  ENERGY = "Energy Engineering",
-  POWER = "Power Systems",
-  RENEWABLE = "Renewable / Environmental",
-  MATERIALS = "Materials Engineering",
-  STRUCTURAL = "Structural Engineering",
-  INDUSTRIAL = "Industrial Engineering",
-  SAFETY = "Safety Engineering",
-  LOGISTICS = "Logistics & Supply Chain",
-
-  // Niche Fields
-  QUANTUM = "Quantum Engineering",
-  NANO = "Nanotechnology",
-  MARINE = "Marine Engineering",
-  MINING = "Mining Engineering",
-  FOOD = "Food Engineering",
-  TEXTILE = "Textile Engineering",
-  SPORTS = "Sports Engineering"
+  DSA = "DSA",
+  MACHINE_LEARNING = "Machine Learning",
+  BACKEND = "Backend",
+  FRONTEND = "Frontend"
 }
 
 export interface SkillDNAScore {

@@ -61,8 +61,18 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
     const init = async () => {
       // FORCE BYPASS BACKEND FOR DEMO
       setTimeout(() => {
-        // Randomly shuffle and pick EXACT_QUESTION_COUNT questions from the bulk bank
-        const shuffledBank = [...localQuestions].sort(() => 0.5 - Math.random());
+        // 1. Filter the bulk bank by the selected domain (category)
+        let filteredBank = localQuestions.filter((q: any) => q.category === domain);
+
+        // 2. Fallback to 'DSA' if the selected category has zero questions
+        if (filteredBank.length === 0) {
+          filteredBank = localQuestions.filter((q: any) => q.category === 'DSA');
+          // Ultimate safety net
+          if (filteredBank.length === 0) filteredBank = localQuestions;
+        }
+
+        // 3. Randomly shuffle and pick EXACT_QUESTION_COUNT questions
+        const shuffledBank = [...filteredBank].sort(() => 0.5 - Math.random());
         const selectedQuestions = shuffledBank.slice(0, Math.min(EXACT_QUESTION_COUNT, shuffledBank.length));
 
         // Map LocalQuestions to the format TrialRoom expects
