@@ -15,16 +15,16 @@ export interface CandidateFilter {
 
 // Helper to determine Tier based on domain
 export const getSkillTier = (domain: SkillDomain): string => {
-  const tier1 = [SkillDomain.SYSTEMS_PROG, SkillDomain.DISTRIBUTED_SYS, SkillDomain.SW_ARCH, SkillDomain.DATA_ENG, SkillDomain.ML_ENG];
-  const tier2 = [SkillDomain.ROBOTICS, SkillDomain.EDGE_COMP, SkillDomain.AUTONOMOUS_SYS, SkillDomain.GAME_DEV];
-  
+  const tier1 = [SkillDomain.DSA, SkillDomain.BACKEND];
+  const tier2 = [SkillDomain.FRONTEND, SkillDomain.MACHINE_LEARNING];
+
   if (tier1.includes(domain)) return "Tier 1";
   if (tier2.includes(domain)) return "Tier 2";
   return "Tier 3"; // Default/General
 };
 
 export const userService = {
-  
+
   // Primary function to fetch and filter candidates from LIVE data sources
   async searchCandidates(filter: CandidateFilter): Promise<User[]> {
     let users: User[] = [];
@@ -35,7 +35,7 @@ export const userService = {
       try {
         const usersRef = collection(db, 'users');
         // Fetching up to 100 users for client-side filtering. 
-        const q = query(usersRef, limit(100)); 
+        const q = query(usersRef, limit(100));
         const snapshot = await getDocs(q);
         users = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
         fetchSuccess = true;
@@ -43,8 +43,8 @@ export const userService = {
         console.warn("Firestore Fetch Candidates Failed (Permissions?):", e);
         fetchSuccess = false;
       }
-    } 
-    
+    }
+
     // Fallback to LocalStorage if DB fetch failed or DB is offline
     if (!fetchSuccess) {
       const storageKey = 'psn_users_db_v1';
@@ -69,7 +69,7 @@ export const userService = {
       const avgScore = user.history && user.history.length > 0
         ? user.history.reduce((sum, h) => sum + (h.score?.average || 0), 0) / user.history.length
         : 0;
-      
+
       const lastTrial = user.history?.[0]?.score;
       const arenaWins = user.stats?.arenaWins || 0;
       const trialsCompleted = user.stats?.trialsCompleted || (user.history?.length || 0);
@@ -95,7 +95,7 @@ export const userService = {
       if (filter.minSkillDNA && avgScore < filter.minSkillDNA) return false;
       if (filter.minTrials && trialsCompleted < filter.minTrials) return false;
       if (filter.minArenaWins && arenaWins < filter.minArenaWins) return false;
-      
+
       // Advanced DNA filters
       if (filter.minProblemSolving && lastTrial && lastTrial.problemSolving < filter.minProblemSolving) return false;
       if (filter.minConceptualDepth && lastTrial && lastTrial.conceptualDepth < filter.minConceptualDepth) return false;
@@ -116,7 +116,7 @@ export const userService = {
       // Priority 3: Average Skill DNA Score
       const scoreA = a.history && a.history.length ? a.history.reduce((s, h) => s + (h.score?.average || 0), 0) / a.history.length : 0;
       const scoreB = b.history && b.history.length ? b.history.reduce((s, h) => s + (h.score?.average || 0), 0) / b.history.length : 0;
-      
+
       return scoreB - scoreA;
     });
   }

@@ -48,7 +48,7 @@ const reduceSessionState = (events: ChallengeEvent[], initialId: string): Challe
   let state: ChallengeSession = {
     id: initialId,
     hostId: '',
-    domain: SkillDomain.ALGORITHMS,
+    domain: SkillDomain.DSA,
     status: 'waiting',
     participants: [],
     maxParticipants: MAX_PARTICIPANTS,

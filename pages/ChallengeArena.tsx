@@ -24,10 +24,10 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
   const [mode, setMode] = useState<'lobby' | 'waiting' | 'queue' | 'race' | 'results'>('lobby');
 
   // Public Selection
-  const [publicDomain, setPublicDomain] = useState<SkillDomain>(SkillDomain.ALGORITHMS);
+  const [publicDomain, setPublicDomain] = useState<SkillDomain>(SkillDomain.DSA);
 
   // Private Session State
-  const [privateDomain, setPrivateDomain] = useState<SkillDomain>(SkillDomain.ALGORITHMS);
+  const [privateDomain, setPrivateDomain] = useState<SkillDomain>(SkillDomain.DSA);
   const [sessionCode, setSessionCode] = useState<string>("");
   const [joinInput, setJoinInput] = useState<string>("");
   const [isHost, setIsHost] = useState(false);
