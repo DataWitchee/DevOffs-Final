@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { TrialSession, SkillDomain, AntiCheatLog } from '../types';
-import { generateSkillTrial, evaluatePerformance, analyzeEnvironmentSnapshot, generateAdaptiveQuestion, evaluateCodeSubmission } from '../services/gemini';
+import { generateSkillTrial, evaluatePerformance, analyzeEnvironmentSnapshot, generateAdaptiveQuestion, evaluateCodeSubmission, simulateExecution } from '../services/gemini';
 import { AlertTriangle, Clock, Eye, Send, Code, Cpu, ShieldAlert, XCircle, CheckCircle, ChevronRight, ChevronLeft, Lock, Loader2, Video, VideoOff, RotateCw, ShieldCheck, Sun, User as UserIcon, Smartphone, Terminal, Play } from 'lucide-react';
 import { SkillRadar } from '../components/SkillRadar';
 import { useProctoring, WarningType } from '../hooks/useProctoring';
-import { localQuestions } from '../data/LocalQuestions';
+import { localQuestions } from '../data/LocalQuestionBank';
 import Editor from '@monaco-editor/react';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
@@ -72,10 +72,8 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
     setShowReview({ visible: false, logs: [] });
 
     try {
-      const { data } = await axios.post(`${API_BASE_URL}/api/execute`, {
-        code: answers[`${currentQ?.id}_${language}`] || getLanguageBoilerplate(language, currentQ?.starterCode || ""),
-        language: language
-      });
+      const codeToRun = answers[`${currentQ?.id}_${language}`] || getLanguageBoilerplate(language, currentQ?.starterCode || "");
+      const data = await simulateExecution(codeToRun, language);
 
       // Predict Time Complexity
       const complexities = ["O(1)", "O(log N)", "O(N)", "O(N log N)", "O(N^2)"];
@@ -98,18 +96,16 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
           visible: true,
           logs: [
             "[SYSTEM] Compiling solution...",
-            "✅ Test Case 1 Passed",
-            "✅ Test Case 2 Passed",
-            "✅ Memory Limits Respected",
+            data.stdout?.toLowerCase().includes("error") ? "❌ Compilation / Logic Error Detected" : "✅ Code Execution Successful",
             `⏱️ Executed in ${data.time}ms`,
             `🧠 Time Complexity Analyzed: ${mockComplexity}`,
-            "[SUCCESS] Verification Complete."
+            data.stdout?.toLowerCase().includes("error") ? "[ERROR] Execution Failed." : "[SUCCESS] Verification Complete."
           ]
         });
       }
     } catch (err: any) {
       setConsoleOutput({
-        stdout: err.response?.data?.error || "Execution failed.",
+        stdout: "AI Simulator failed to process execution request.",
         time: 0,
         memory: 0
       });
@@ -117,7 +113,7 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
         visible: true,
         logs: [
           "[SYSTEM] Compiling solution...",
-          "❌ Test Cases FAILED",
+          "❌ Network / Engine FAILED",
           "[ERROR] Execution Engine Error."
         ]
       });

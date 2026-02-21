@@ -235,7 +235,7 @@ export const generateAdaptiveQuestion = async (
 
     const prompt = `Generate a single ${difficultyMarker} level coding challenge for ${domain}.
     The user scored ${lastScore}% on their previous attempt. Adjust the complexity accordingly.
-    Output MUST be a JSON object containing: text (the problem statement), category (Practical/Concept), starterCode (function signature in JS), constraints (array of strings).`;
+    Output MUST be a JSON object containing: text (the problem statement), category (Practical/Concept), starterCode (function signature in JavaScript ONLY), constraints (array of strings).`;
 
     const apiCall = withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: FAST_MODEL,
@@ -297,6 +297,40 @@ export const evaluateCodeSubmission = async (
                     analysis: { type: Type.STRING }
                 },
                 required: ["score", "feedback", "analysis"]
+            }
+        }
+    }));
+    return parseResponse(response.text);
+};
+
+export const simulateExecution = async (
+    code: string,
+    language: string
+): Promise<{ stdout: string; time: number; memory: number }> => {
+    const ai = getAiClient();
+    const prompt = `You are a high-performance ${language} code execution engine.
+    Dry run the following code and predict its standard output exactly as a compiler would print it.
+    If there is a syntax error, return the compiler error in the stdout field.
+    Provide realistic estimated execution time in ms (e.g. 5) and memory in bytes (e.g. 10240).
+    
+    Code:
+    ${code}
+    
+    Output JSON.`;
+
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: FAST_MODEL,
+        contents: prompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    stdout: { type: Type.STRING },
+                    time: { type: Type.NUMBER },
+                    memory: { type: Type.NUMBER }
+                },
+                required: ["stdout", "time", "memory"]
             }
         }
     }));

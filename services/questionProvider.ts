@@ -1,5 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
-import { localQuestions } from '../data/LocalQuestions';
+import { localQuestions } from '../data/LocalQuestionBank';
 
 // ---------------------------------------------------------
 // 1. Standardized Types and Interfaces
@@ -228,7 +228,7 @@ export class QuestionService {
 
     async getQuestions(request: QuestionRequest): Promise<QuestionResponse[]> {
         const timeoutError = new Error("Provider Timeout");
-        const timeoutMs = 3000; // Strict 3-second timeout for Gemini
+        const timeoutMs = 10000; // 10-second timeout for Gemini
         const timeout = new Promise<never>((_, reject) =>
             setTimeout(() => reject(timeoutError), timeoutMs)
         );
@@ -237,7 +237,7 @@ export class QuestionService {
         const isML = request.topic.toLowerCase().includes('machine learning') || request.topic === 'ML' || request.topic === 'Machine Learning';
         const modifiedRequest = { ...request };
         if (isML) {
-             modifiedRequest.topic = request.topic + " (Specifically focus on Tensor transformations or Backpropagation calculus for deep technical depth)";
+            modifiedRequest.topic = request.topic + " (Specifically focus on Tensor transformations or Backpropagation calculus for deep technical depth)";
         }
 
         try {
@@ -247,7 +247,7 @@ export class QuestionService {
                 timeout
             ]);
         } catch (e) {
-            console.warn(`Primary provider failed or timed out (${timeoutMs}ms). Silently falling back to 900-question LOCAL_QUESTIONS bank.`);
+            console.warn(`Primary provider failed or timed out (${timeoutMs}ms). Silently falling back to massive offline bank.`);
             // Fallback strategy to guarantee zero-error UX
             const fallbackProvider = new LocalProvider();
             return await fallbackProvider.generateQuestions(request);
