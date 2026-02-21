@@ -82,33 +82,59 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
 
       const codeToRun = userCode;
 
-      // Route through our backend /api/execute to avoid CORS issues
-      const BACKEND_URL = 'https://devoffs-api.onrender.com';
-      const res = await fetch(`${BACKEND_URL}/api/execute`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: codeToRun, language })
-      });
+      // Direct Piston API call (supports CORS natively, no Render dependency)
+      const pistonLang = language === 'cpp' ? 'c++' : 'python';
+      const pistonVersion = language === 'cpp' ? '10.2.0' : '3.10.0';
 
-      if (!res.ok) throw new Error("Compiler API failed");
-      const pistonData = await res.json();
+      // 12 second hard timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
 
-      const stdOut = pistonData.stdout || '';
-      const stdErr = pistonData.stderr || '';
-      const isError = !!stdErr || pistonData.code !== 0;
+      let res: Response;
+      try {
+        res = await fetch('https://emkc.org/api/v2/piston/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            language: pistonLang,
+            version: pistonVersion,
+            files: [{ name: language === 'cpp' ? 'solution.cpp' : 'solution.py', content: codeToRun }],
+            stdin: '',
+            compile_timeout: 10000,
+            run_timeout: 5000,
+          })
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
-      const terminalOutput = `[${language.toUpperCase()} COMPILER — DevOffs Engine]\n\n` +
-        (isError ? `ERROR:\n${stdErr || stdOut}\n` : `OUTPUT:\n${stdOut || '(No output generated)'}\n`);
+      if (!res!.ok) throw new Error(`Compiler returned ${res!.status}`);
+      const pistonData = await res!.json();
 
-      setConsoleOutput({ stdout: terminalOutput, time: pistonData.time || 0, memory: pistonData.memory || 0, complexity: 'N/A' });
+      const compileErr = pistonData.compile?.output || '';
+      const runOut = pistonData.run?.stdout || '';
+      const runErr = pistonData.run?.stderr || '';
+      const exitCode = pistonData.run?.code ?? 0;
+
+      const isError = !!compileErr || !!runErr || exitCode !== 0;
+
+      const terminalOutput =
+        `[${language.toUpperCase()} COMPILER v${pistonVersion} — DevOffs Engine]\n\n` +
+        (compileErr ? `COMPILATION ERROR:\n${compileErr}\n` : '') +
+        (!compileErr && runErr ? `RUNTIME ERROR:\n${runErr}\n` : '') +
+        (!isError && runOut ? `OUTPUT:\n${runOut}` : '') +
+        (!isError && !runOut ? '(Program ran with no output)' : '');
+
+      setConsoleOutput({ stdout: terminalOutput, time: pistonData.run?.cpu_time || 0, memory: pistonData.run?.memory || 0, complexity: 'N/A' });
 
       if (isError) {
         setShowReview({
           visible: true,
           logs: [
             '[SYSTEM] Compiling solution...',
-            '❌ Compilation / Runtime Error Detected',
-            '[ERROR] Fix the error shown in the console panel below.'
+            '❌ Compilation / Runtime Error',
+            '[ERROR] Check the terminal output below and fix your code.'
           ]
         });
       } else {
@@ -116,23 +142,26 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
           visible: true,
           logs: [
             '[SYSTEM] Compiling solution...',
-            '✅ Code Executed Successfully',
+            '✅ Code Compiled & Executed Successfully',
             '[SUCCESS] Ready to Submit to AI Judge.'
           ]
         });
       }
     } catch (err: any) {
+      const isTimeout = err?.name === 'AbortError';
       setConsoleOutput({
-        stdout: "AI Simulator failed to process execution request.",
+        stdout: isTimeout
+          ? 'Execution Timed Out (12s limit exceeded).\nHint: Check for infinite loops or very slow algorithms.'
+          : `Compiler Error: ${err?.message || 'Unknown error'}`,
         time: 0,
         memory: 0
       });
       setShowReview({
         visible: true,
         logs: [
-          "[SYSTEM] Compiling solution...",
-          "❌ Network / Engine FAILED",
-          "[ERROR] Execution Engine Error."
+          '[SYSTEM] Compiling solution...',
+          isTimeout ? '⏱️ Execution Timed Out (12s)' : '❌ Compiler Engine Unreachable',
+          isTimeout ? '[HINT] Check for infinite loops in your code.' : '[ERROR] Check your internet connection and try again.'
         ]
       });
     } finally {
