@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { TrialSession, SkillDomain, AntiCheatLog } from '../types';
-import { generateSkillTrial, evaluatePerformance, analyzeEnvironmentSnapshot, generateAdaptiveQuestion, evaluateCodeSubmission, simulateExecution } from '../services/gemini';
+import { generateSkillTrial, evaluatePerformance, generateAdaptiveQuestion, evaluateCodeSubmission, simulateExecution } from '../services/gemini';
 import { AlertTriangle, Clock, Eye, Send, Code, Cpu, ShieldAlert, XCircle, CheckCircle, ChevronRight, ChevronLeft, Lock, Loader2, Video, VideoOff, RotateCw, ShieldCheck, Sun, User as UserIcon, Smartphone, Terminal, Play } from 'lucide-react';
 import { SkillRadar } from '../components/SkillRadar';
 import { useProctoring, WarningType } from '../hooks/useProctoring';
@@ -185,17 +185,8 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
   const proctor = useProctoring(videoRef, {
     enabled: session.status === 'active',
     gazeThresholdMs: 3000,
-    onWarning: (warning) => {
-      // Only flag hard violations (no face / multiple faces) as integrity issues
-      // Soft gaze/confusion warnings are logged only, NOT used to block submission
-      const isHardViolation = warning.type === 'NO_FACE' || warning.type === 'MULTIPLE_FACES';
-      if (isHardViolation) {
-        setAntiCheat(prev => ({
-          ...prev,
-          environmentViolations: [...(prev.environmentViolations || []), warning.message]
-        }));
-      }
-    }
+    // Warnings are shown visually in the UI but NEVER block submission
+    onWarning: () => { }
   });
 
   useEffect(() => {
@@ -297,7 +288,7 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
     if (antiCheat.pasteCount > MAX_PASTES) violations.push(`Clipboard misuse detected.`);
     if (antiCheat.tabSwitchCount > MAX_TAB_SWITCHES) violations.push(`Excessive window switching.`);
     if (antiCheat.focusLostTime > MAX_FOCUS_LOST_TIME) violations.push(`Extended absence.`);
-    if (antiCheat.environmentViolations && antiCheat.environmentViolations.length > 5) violations.push(`Persistent environment security violations.`);
+    // Note: camera violations are shown as warnings on-screen but never block submission
 
     if (violations.length > 0) {
       setSession(prev => ({
