@@ -20,6 +20,16 @@ const BOTS = [
   { name: "Git_Push_Force", avatar: "GP" }
 ];
 
+const getStarterCode = (lang: string): string => {
+  switch (lang) {
+    case 'cpp': return `#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    // Write your solution here\n    cout << "Hello, Arena!" << endl;\n    return 0;\n}`;
+    case 'python': return `# Write your solution here\n\ndef solve():\n    print("Hello, Arena!")\n\nsolve()`;
+    case 'java': return `public class Solution {\n    public static void main(String[] args) {\n        // Write your solution here\n        System.out.println("Hello, Arena!");\n    }\n}`;
+    case 'javascript': return `// Write your solution here\n\nfunction solve() {\n    console.log("Hello, Arena!");\n}\n\nsolve();`;
+    default: return `// Write your solution here`;
+  }
+};
+
 export const ChallengeArena: React.FC<Props> = ({ user }) => {
   const navigate = useNavigate();
   // Modes: lobby, waiting (private host), queue (public), race, results
@@ -53,11 +63,13 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
   const [checkpoints, setCheckpoints] = useState<ChallengeCheckpoint[]>([]);
   const [participants, setParticipants] = useState<ChallengeParticipant[]>([]);
   const [timeLeft, setTimeLeft] = useState(600); // 10 mins
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(getStarterCode('cpp'));
   const [validating, setValidating] = useState(false);
   const [feed, setFeed] = useState<string[]>([]);
   const [copySuccess, setCopySuccess] = useState(false);
-  const [language, setLanguage] = useState<'typescript' | 'javascript' | 'python' | 'cpp' | 'java'>('typescript');
+  const [language, setLanguage] = useState<'javascript' | 'python' | 'cpp' | 'java'>('cpp');
+  const [runOutput, setRunOutput] = useState<string>('');
+  const [isRunning, setIsRunning] = useState(false);
 
   // Anti-Cheat / Monitoring State
   const [violationCount, setViolationCount] = useState(0);
@@ -442,6 +454,36 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
     setTimeout(() => setCopySuccess(false), 2000);
   };
 
+  const handleRunCode = async () => {
+    setIsRunning(true);
+    setRunOutput('Running...');
+    const langMap: Record<string, { language: string; version: string }> = {
+      cpp: { language: 'c++', version: '10.2.0' },
+      python: { language: 'python', version: '3.10.0' },
+      java: { language: 'java', version: '15.0.2' },
+      javascript: { language: 'javascript', version: '18.15.0' },
+    };
+    const runtime = langMap[language] || langMap['cpp'];
+    try {
+      const res = await fetch('https://emkc.org/api/v2/piston/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          language: runtime.language,
+          version: runtime.version,
+          files: [{ name: 'main', content: code }],
+          stdin: '',
+        }),
+      });
+      const data = await res.json();
+      const output = data?.run?.output || data?.run?.stderr || 'No output.';
+      setRunOutput(output);
+    } catch (e) {
+      setRunOutput('Error: Could not connect to code runner. Check your network.');
+    }
+    setIsRunning(false);
+  };
+
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60);
     const sec = s % 60;
@@ -685,15 +727,18 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
             <div className="flex items-center gap-4">
               <select
                 value={language}
-                onChange={(e) => setLanguage(e.target.value as any)}
+                onChange={(e) => { const l = e.target.value as any; setLanguage(l); setCode(getStarterCode(l)); }}
                 className="bg-slate-800 text-white text-xs px-3 py-1.5 rounded-md border border-slate-600 outline-none focus:border-cyan-500 font-mono"
               >
                 <option value="cpp">C++ (GCC)</option>
                 <option value="python">Python 3</option>
-                <option value="typescript">TypeScript</option>
+                <option value="javascript">JavaScript</option>
                 <option value="java">Java</option>
               </select>
-              <span className="text-xs text-slate-400 font-mono">race_solution.{language === 'python' ? 'py' : language === 'cpp' ? 'cpp' : 'ts'}</span>
+              <button onClick={handleRunCode} disabled={isRunning} className="flex items-center gap-1.5 bg-green-600 hover:bg-green-500 disabled:opacity-60 text-white text-xs font-bold px-3 py-1.5 rounded-md transition-all">
+                {isRunning ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />} Run Code
+              </button>
+              <span className="text-xs text-slate-400 font-mono">{language === 'python' ? 'main.py' : language === 'cpp' ? 'main.cpp' : language === 'java' ? 'Main.java' : 'main.js'}</span>
             </div>
           </div>
           <div className="flex-1 w-full bg-[#0f172a] relative">
@@ -706,6 +751,16 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
               options={{ minimap: { enabled: false }, fontSize: 14, wordWrap: 'on', padding: { top: 16 } }}
             />
           </div>
+          {/* Terminal Output Panel */}
+          {runOutput && (
+            <div className="border-t border-slate-700 bg-black">
+              <div className="flex items-center justify-between px-4 py-2 bg-slate-900 border-b border-slate-700">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">▸ Terminal Output</span>
+                <button onClick={() => setRunOutput('')} className="text-slate-600 hover:text-white text-xs">✕ Clear</button>
+              </div>
+              <pre className="text-green-400 font-mono text-xs p-4 overflow-auto max-h-32 whitespace-pre-wrap">{runOutput}</pre>
+            </div>
+          )}
           {lastViolationMsg && (
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-600/90 text-white px-6 py-4 rounded-xl shadow-2xl z-20 animate-bounce font-bold border-2 border-red-400 flex flex-col items-center gap-2"><AlertTriangle size={32} /><span>{lastViolationMsg}</span></div>
           )}
