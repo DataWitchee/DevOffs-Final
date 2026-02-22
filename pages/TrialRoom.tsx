@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { TrialSession, SkillDomain, AntiCheatLog } from '../types';
-import { generateSkillTrial, evaluatePerformance, generateAdaptiveQuestion, evaluateCodeSubmission, simulateExecution } from '../services/gemini';
-import { AlertTriangle, Clock, Eye, Send, Code, Cpu, ShieldAlert, XCircle, CheckCircle, ChevronRight, ChevronLeft, Lock, Loader2, Video, VideoOff, RotateCw, ShieldCheck, Sun, User as UserIcon, Smartphone, Terminal, Play } from 'lucide-react';
+import { generateSkillTrial, evaluatePerformance, generateAdaptiveQuestion, evaluateCodeSubmission, simulateExecution, analyzeCodeComplexity } from '../services/gemini';
+import { AlertTriangle, Clock, Eye, Send, Code, Cpu, ShieldAlert, XCircle, CheckCircle, ChevronRight, ChevronLeft, Lock, Loader2, Video, VideoOff, RotateCw, ShieldCheck, Sun, User as UserIcon, Smartphone, Terminal, Play, Maximize2, Minimize2 } from 'lucide-react';
 import { SkillRadar } from '../components/SkillRadar';
 import { useProctoring, WarningType } from '../hooks/useProctoring';
 import { localQuestions } from '../data/LocalQuestionBank';
@@ -51,6 +51,9 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
   const [language, setLanguage] = useState<'python' | 'cpp'>('cpp');
   const [isCompiling, setIsCompiling] = useState(false);
   const [consoleOutput, setConsoleOutput] = useState<{ stdout: string, time: number, memory: number, complexity?: string } | null>(null);
+  const [terminalExpanded, setTerminalExpanded] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState<{ timeComplexity: string; spaceComplexity: string; review: string; suggestion: string } | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const currentQ = questions[currentQuestionIdx];
 
@@ -149,6 +152,14 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
         ]
       });
 
+      // Fire-and-forget AI complexity analysis after successful execution
+      if (!isError) {
+        setAiAnalysis(null);
+        setIsAnalyzing(true);
+        analyzeCodeComplexity(codeToRun, language, currentQ?.text || '').then(result => {
+          setAiAnalysis(result);
+        }).catch(() => { }).finally(() => setIsAnalyzing(false));
+      }
     } catch (err: any) {
       const isTimeout = err?.name === 'AbortError';
       setConsoleOutput({
@@ -701,24 +712,68 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
             </div>
           )}
 
-          <div className="absolute bottom-6 left-6 z-10 w-3/4">
+          {/* UPGRADED TERMINAL PANEL */}
+          <div className={`absolute bottom-20 left-4 right-4 z-10 transition-all duration-300 ${terminalExpanded ? 'h-72' : 'h-40'}`}>
             {consoleOutput && (
-              <div className="bg-slate-900 border border-slate-700 p-4 rounded-xl shadow-2xl animate-fade-in font-mono text-sm mb-4">
-                <div className="flex items-center gap-2 text-slate-400 mb-2 border-b border-slate-800 pb-2">
-                  <Terminal size={14} /> Console Output
-                </div>
-                {consoleOutput.stdout ? (
-                  <pre className="text-slate-300 whitespace-pre-wrap">{consoleOutput.stdout}</pre>
-                ) : (
-                  <div className="text-green-400">🚀 Execution Success! Time Complexity Analyzer initialized.</div>
-                )}
-                {(consoleOutput.time > 0 || consoleOutput.complexity) && (
-                  <div className="mt-3 pt-3 border-t border-slate-800 flex gap-4 text-xs font-bold">
-                    {consoleOutput.time > 0 && <span className="text-cyan-400">⏱️ Time: {consoleOutput.time}ms</span>}
-                    {consoleOutput.memory > 0 && <span className="text-purple-400">🧠 Memory: {(consoleOutput.memory / 1024 / 1024).toFixed(2)}MB</span>}
-                    {consoleOutput.complexity && <span className="text-amber-400">⚡ Complexity: {consoleOutput.complexity}</span>}
+              <div className="h-full bg-slate-950 border border-slate-700 rounded-xl shadow-2xl font-mono text-xs flex flex-col">
+                {/* Terminal Header */}
+                <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800 bg-slate-900 rounded-t-xl shrink-0">
+                  <div className="flex items-center gap-2 text-slate-400">
+                    <Terminal size={12} />
+                    <span className="font-bold text-slate-300">Console Output</span>
+                    {isAnalyzing && <span className="text-cyan-400 animate-pulse text-[10px]">⚡ AI analyzing...</span>}
                   </div>
-                )}
+                  <div className="flex items-center gap-3">
+                    {/* AI Complexity Badges */}
+                    {aiAnalysis && (
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 bg-cyan-900/30 text-cyan-300 rounded text-[10px] font-bold border border-cyan-500/20">⏱ {aiAnalysis.timeComplexity}</span>
+                        <span className="px-2 py-0.5 bg-purple-900/30 text-purple-300 rounded text-[10px] font-bold border border-purple-500/20">🧠 {aiAnalysis.spaceComplexity}</span>
+                      </div>
+                    )}
+                    <button onClick={() => setTerminalExpanded(e => !e)} className="text-slate-500 hover:text-white transition-colors">
+                      {terminalExpanded ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+                    </button>
+                    <button onClick={() => { setConsoleOutput(null); setAiAnalysis(null); }} className="text-slate-500 hover:text-red-400 transition-colors">
+                      <XCircle size={12} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Terminal Body */}
+                <div className="flex-1 overflow-y-auto">
+                  {/* Test Case Expected vs Actual */}
+                  {currentQ?.testCases && currentQ.testCases.length > 0 && !consoleOutput.stdout.includes('ERROR') && (
+                    <div className="px-3 py-2 border-b border-slate-800 grid grid-cols-2 gap-3">
+                      {currentQ.testCases.slice(0, 2).map((tc: any, i: number) => {
+                        const actualOut = consoleOutput.stdout.replace(/\[.*\]\n\n.*?\n/s, '').replace('OUTPUT:\n', '').trim();
+                        const passed = actualOut.trim() === String(tc.expectedOutput).trim();
+                        return (
+                          <div key={i} className={`p-2 rounded border text-[10px] ${passed ? 'border-green-500/30 bg-green-900/10' : 'border-slate-700 bg-slate-900/50'}`}>
+                            <div className="flex items-center gap-1 mb-1">
+                              {passed ? <CheckCircle size={10} className="text-green-400" /> : <div className="w-2 h-2 rounded-full bg-slate-600" />}
+                              <span className="font-bold text-slate-400">Test {i + 1}</span>
+                            </div>
+                            <div><span className="text-slate-500">Input: </span><span className="text-slate-300">{String(tc.input).slice(0, 30)}</span></div>
+                            <div><span className="text-slate-500">Expected: </span><span className="text-green-400">{String(tc.expectedOutput).slice(0, 30)}</span></div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Raw stdout */}
+                  <pre className="p-3 text-slate-300 whitespace-pre-wrap leading-relaxed">{consoleOutput.stdout}</pre>
+
+                  {/* AI Review */}
+                  {aiAnalysis && (
+                    <div className="mx-3 mb-3 p-2 bg-indigo-900/20 border border-indigo-500/20 rounded text-[10px]">
+                      <div className="text-indigo-300 font-bold mb-1">🤖 AI Review</div>
+                      <div className="text-slate-300">{aiAnalysis.review}</div>
+                      <div className="text-amber-300 mt-1">💡 {aiAnalysis.suggestion}</div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

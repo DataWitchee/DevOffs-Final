@@ -308,7 +308,44 @@ export const evaluateCodeSubmission = async (
     return parseResponse(response.text);
 };
 
+export const analyzeCodeComplexity = async (
+    code: string,
+    language: string,
+    problemText: string
+): Promise<{ timeComplexity: string; spaceComplexity: string; review: string; suggestion: string }> => {
+    const ai = getAiClient();
+    const prompt = `Analyze this ${language} code for the problem: "${problemText.slice(0, 200)}".
+Code:
+\`\`\`
+${code.slice(0, 1500)}
+\`\`\`
+Give time complexity (Big O), space complexity (Big O), a one-line code quality review, and one improvement suggestion. Be very concise. Output strict JSON.`;
+
+    const apiCall = withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: FAST_MODEL,
+        contents: prompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    timeComplexity: { type: Type.STRING },
+                    spaceComplexity: { type: Type.STRING },
+                    review: { type: Type.STRING },
+                    suggestion: { type: Type.STRING }
+                },
+                required: ["timeComplexity", "spaceComplexity", "review", "suggestion"]
+            }
+        }
+    }));
+    const timeout = new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 8000));
+    const response = await Promise.race([apiCall, timeout]);
+    if (!response) throw new Error("API Timeout");
+    return parseResponse(response.text);
+};
+
 export const simulateExecution = async (
+
     code: string,
     language: string,
     problemText?: string
