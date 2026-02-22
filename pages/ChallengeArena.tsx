@@ -455,32 +455,63 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
   };
 
   const handleRunCode = async () => {
+    if (!code.trim()) {
+      setRunOutput('No code provided. Write your solution first.');
+      return;
+    }
     setIsRunning(true);
-    setRunOutput('Running...');
-    const langMap: Record<string, { language: string; version: string }> = {
-      cpp: { language: 'c++', version: '10.2.0' },
-      python: { language: 'python', version: '3.10.0' },
-      java: { language: 'java', version: '15.0.2' },
-      javascript: { language: 'javascript', version: '18.15.0' },
-    };
-    const runtime = langMap[language] || langMap['cpp'];
+    setRunOutput('⏳ Compiling and running...');
+
+    const wandboxCompiler = language === 'cpp' ? 'gcc-head' : language === 'python' ? 'cpython-3.10.4' : '';
+    const wandboxOptions = language === 'cpp' ? 'warning,c++17' : '';
+
+    // Try Wandbox first (for C++ and Python)
+    if (wandboxCompiler) {
+      try {
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 15000);
+        const r = await fetch('https://wandbox.org/api/compile.json', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: ctrl.signal,
+          body: JSON.stringify({ code, compiler: wandboxCompiler, options: wandboxOptions, stdin: '' })
+        });
+        clearTimeout(tid);
+        if (r.ok) {
+          const d = await r.json();
+          const out = (d.program_output || '').trim();
+          const err = d.compiler_error || d.program_error || '';
+          const combined = [out, err].filter(Boolean).join('\n') || 'No output.';
+          setRunOutput(`[${language.toUpperCase()} — DevOffs Engine]\n─────────────────\n${combined}`);
+          setIsRunning(false);
+          return;
+        }
+      } catch { /* fall through to backup */ }
+    }
+
+    // Fallback: devoffs Render backend (all languages)
     try {
-      const res = await fetch('https://emkc.org/api/v2/piston/execute', {
+      const ctrl2 = new AbortController();
+      const tid2 = setTimeout(() => ctrl2.abort(), 30000);
+      const r2 = await fetch('https://devoffs-api.onrender.com/api/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          language: runtime.language,
-          version: runtime.version,
-          files: [{ name: 'main', content: code }],
-          stdin: '',
-        }),
+        signal: ctrl2.signal,
+        body: JSON.stringify({ code, language, stdin: '' })
       });
-      const data = await res.json();
-      const output = data?.run?.output || data?.run?.stderr || 'No output.';
-      setRunOutput(output);
-    } catch (e) {
-      setRunOutput('Error: Could not connect to code runner. Check your network.');
-    }
+      clearTimeout(tid2);
+      if (r2.ok) {
+        const d2 = await r2.json();
+        const out = (d2.stdout || '').trim();
+        const err = d2.stderr || '';
+        const combined = [out, err].filter(Boolean).join('\n') || 'No output.';
+        setRunOutput(`[${language.toUpperCase()} — DevOffs Engine]\n─────────────────\n${combined}`);
+        setIsRunning(false);
+        return;
+      }
+    } catch { /* all failed */ }
+
+    setRunOutput('❌ All execution backends unavailable. Please try again in a moment.');
     setIsRunning(false);
   };
 
