@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
-import { Clock, Code2, Cpu, Play, CheckCircle, ShieldCheck, XCircle, Terminal, AlertTriangle } from 'lucide-react';
+import { Clock, Code2, Cpu, Play, CheckCircle, ShieldCheck, XCircle, Terminal, AlertTriangle, Target, Zap, Activity } from 'lucide-react';
 import { API_BASE_URL } from '../config';
-import { localQuestions } from '../data/LocalQuestions';
+import { localQuestions } from '../data/LocalQuestionBank';
+import { evaluateArenaBattle } from '../services/gemini';
 
 // Grab the first DSA algorithm question dynamically
 const activeQuestion = localQuestions.find(q => q.category === 'DSA') || localQuestions[0];
@@ -19,13 +20,30 @@ export const BattleArenaPage: React.FC = () => {
   const [consoleOutput, setConsoleOutput] = useState<{ stdout: string, time: number, memory: number } | null>(null);
   const [showReview, setShowReview] = useState<{ visible: boolean, logs: string[] }>({ visible: false, logs: [] });
 
-  // Anomaly Tracking
+  // Anomaly & Telemetry Tracking
   const [anomalyLog, setAnomalyLog] = useState<string | null>(null);
   const previousCodeLength = useRef(TARGET_CODE.length);
+  const [totalKeystrokes, setTotalKeystrokes] = useState(0);
+  const [longestThinkingPause, setLongestThinkingPause] = useState(0);
+  const lastKeystrokeTime = useRef<number>(Date.now());
+  const [startTime] = useState(Date.now());
+
+  // Judging State
+  const [isJudging, setIsJudging] = useState(false);
+  const [scorecard, setScorecard] = useState<any>(null);
 
   const handleEditorChange = (val: string | undefined) => {
     const newCode = val || '';
     setUserCode(newCode);
+    setTotalKeystrokes(k => k + 1);
+
+    // Track Thinking Pause
+    const now = Date.now();
+    const pause = now - lastKeystrokeTime.current;
+    if (pause > longestThinkingPause) {
+      setLongestThinkingPause(pause);
+    }
+    lastKeystrokeTime.current = now;
 
     // Track Paste Anomalies (Massive sudden insertion)
     if (newCode.length - previousCodeLength.current > 50) {
@@ -123,6 +141,34 @@ export const BattleArenaPage: React.FC = () => {
       });
     } finally {
       setIsCompiling(false);
+    }
+  };
+
+  const handleSubmitBattle = async () => {
+    setIsJudging(true);
+    setScorecard(null);
+
+    const timeTakenMs = Date.now() - startTime;
+    const timeTakenMins = timeTakenMs / 60000;
+    const cpm = Math.floor(totalKeystrokes / (timeTakenMins || 1));
+
+    try {
+      const report = await evaluateArenaBattle(
+        userCode,
+        language,
+        activeQuestion.questionText,
+        timeTakenMs,
+        cpm,
+        longestThinkingPause
+      );
+      setScorecard(report);
+    } catch (e) {
+      setScorecard({
+        edgeCasesScore: 0, timeSpaceScore: 0, directionScore: 0, typingScore: 0, totalScore: 0,
+        timeComplexity: "Unknown", spaceComplexity: "Unknown", summary: "AI Judge failed to evaluate. Connection dropped."
+      });
+    } finally {
+      setIsJudging(false);
     }
   };
 
@@ -311,13 +357,84 @@ export const BattleArenaPage: React.FC = () => {
             {isCompiling ? 'Compiling...' : <><Play size={16} /> Run Tests</>}
           </button>
           <button
-            onClick={handleRunTests}
-            className="bg-green-600 hover:bg-green-500 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 transition-all shadow-lg shadow-green-900/20"
+            onClick={handleSubmitBattle}
+            disabled={isJudging}
+            className="bg-green-600 hover:bg-green-500 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 transition-all shadow-lg shadow-green-900/20 disabled:opacity-50"
           >
-            Submit Verification <CheckCircle size={16} />
+            {isJudging ? 'AI Judging...' : 'Submit Battle'} <CheckCircle size={16} />
           </button>
         </div>
       </div>
-    </div>
+
+      {/* 5. SCORECARD MODAL */}
+      {scorecard && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-slate-900 border border-slate-700 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden shadow-cyan-900/20">
+            <div className="bg-slate-800 border-b border-slate-700 p-6 flex justify-between items-center relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-r from-cyan-900/20 to-purple-900/20 mix-blend-overlay"></div>
+              <h2 className="text-2xl font-bold text-white flex items-center gap-3 relative z-10"><Target className="text-cyan-400" /> Battle Scorecard</h2>
+              <div className="bg-slate-950 px-4 py-2 rounded-lg border border-slate-700 text-center relative z-10">
+                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Total Grade</div>
+                <div className={`text-2xl font-black font-mono ${scorecard.totalScore >= 80 ? 'text-green-400' : scorecard.totalScore >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{scorecard.totalScore}/100</div>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              <p className="text-slate-300 italic">"{scorecard.summary}"</p>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-slate-400 text-xs font-bold uppercase flex items-center gap-1"><ShieldCheck size={14} /> Edge Cases</span>
+                    <span className="text-cyan-400 font-mono font-bold">{scorecard.edgeCasesScore}/100</span>
+                  </div>
+                  <div className="w-full bg-slate-800 rounded-full h-1.5"><div className="bg-cyan-500 h-1.5 rounded-full" style={{ width: `${scorecard.edgeCasesScore}%` }}></div></div>
+                </div>
+
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-slate-400 text-xs font-bold uppercase flex items-center gap-1"><Cpu size={14} /> Time & Space Optimal</span>
+                    <span className="text-purple-400 font-mono font-bold">{scorecard.timeSpaceScore}/100</span>
+                  </div>
+                  <div className="w-full bg-slate-800 rounded-full h-1.5"><div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${scorecard.timeSpaceScore}%` }}></div></div>
+                </div>
+
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-slate-400 text-xs font-bold uppercase flex items-center gap-1"><Zap size={14} /> Logical Direction</span>
+                    <span className="text-amber-400 font-mono font-bold">{scorecard.directionScore}/100</span>
+                  </div>
+                  <div className="w-full bg-slate-800 rounded-full h-1.5"><div className="bg-amber-500 h-1.5 rounded-full" style={{ width: `${scorecard.directionScore}%` }}></div></div>
+                </div>
+
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-slate-400 text-xs font-bold uppercase flex items-center gap-1"><Activity size={14} /> Execution Speed / Typing</span>
+                    <span className="text-pink-400 font-mono font-bold">{scorecard.typingScore}/100</span>
+                  </div>
+                  <div className="w-full bg-slate-800 rounded-full h-1.5"><div className="bg-pink-500 h-1.5 rounded-full" style={{ width: `${scorecard.typingScore}%` }}></div></div>
+                </div>
+              </div>
+
+              <div className="flex gap-4 p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                <div><span className="text-slate-500 text-xs">AI Computed Time Complexity:</span> <span className="font-mono text-cyan-300 font-bold ml-1">{scorecard.timeComplexity}</span></div>
+                <div><span className="text-slate-500 text-xs">AI Computed Space Complexity:</span> <span className="font-mono text-purple-300 font-bold ml-1">{scorecard.spaceComplexity}</span></div>
+              </div>
+
+              <button
+                onClick={() => {
+                  setScorecard(null);
+                  setUserCode(TARGET_CODE);
+                  setTotalKeystrokes(0);
+                }}
+                className="w-full py-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg font-bold transition-colors shadow-lg shadow-cyan-900/30"
+              >
+                Close & Next Battle
+              </button>
+            </div >
+          </div >
+        </div >
+      )}
+    </div >
   );
 };

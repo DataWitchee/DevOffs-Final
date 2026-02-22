@@ -393,6 +393,72 @@ Give time complexity (Big O), space complexity (Big O), a one-line code quality 
     return parseResponse(response.text);
 };
 
+export const evaluateArenaBattle = async (
+    code: string,
+    language: string,
+    problemText: string,
+    timeTakenMs: number,
+    cpm: number,
+    thinkingTimeMs: number
+): Promise<{
+    edgeCasesScore: number;
+    timeSpaceScore: number;
+    directionScore: number;
+    typingScore: number;
+    totalScore: number;
+    timeComplexity: string;
+    spaceComplexity: string;
+    summary: string;
+}> => {
+    const ai = getAiClient();
+    const prompt = `You are an elite Senior Staff Engineer judging a coding battle candidate.
+Problem: "${problemText}"
+Language: ${language}
+Code:
+\`\`\`
+${code}
+\`\`\`
+Telemetry Data:
+- Time Spent: ${Math.floor(timeTakenMs / 1000)}s
+- Characters Per Minute (CPM): ${cpm}
+- Longest Thinking Pause: ${Math.floor(thinkingTimeMs / 1000)}s
+
+Evaluate the candidate based on these specific axes (each out of 100):
+1. edgeCasesScore: Did they account for bounds, nulls, negative numbers, or tricks?
+2. timeSpaceScore: Is this the numerically optimal approach in terms of Big O?
+3. directionScore: Were they thinking in the right direction (e.g. hash map vs nested loops), even if they didn't finish or compile?
+4. typingScore: Analyze their CPM and thinking pause. E.g. high CPM + low pause + buggy code = rushing; low CPM + high pause + elegant code = deep thought; high CPM + low pause + perfect code = mastery. Grade how effectively they utilized their time.
+
+Also provide explicit timeComplexity and spaceComplexity (e.g. O(N)), calculate a totalScore (average of the 4), and write a concise 2-sentence summary of your overall judgment. Output strictly as JSON.`;
+
+    const apiCall = withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: REASONING_MODEL, // Using pro model for deeper judgment context
+        contents: prompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    edgeCasesScore: { type: Type.NUMBER },
+                    timeSpaceScore: { type: Type.NUMBER },
+                    directionScore: { type: Type.NUMBER },
+                    typingScore: { type: Type.NUMBER },
+                    totalScore: { type: Type.NUMBER },
+                    timeComplexity: { type: Type.STRING },
+                    spaceComplexity: { type: Type.STRING },
+                    summary: { type: Type.STRING }
+                },
+                required: ["edgeCasesScore", "timeSpaceScore", "directionScore", "typingScore", "totalScore", "timeComplexity", "spaceComplexity", "summary"]
+            }
+        }
+    }));
+
+    const timeout = new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 30000));
+    const response = await Promise.race([apiCall, timeout]);
+    if (!response) throw new Error("API Timeout");
+    return parseResponse(response.text);
+};
+
 export const simulateExecution = async (
 
     code: string,
