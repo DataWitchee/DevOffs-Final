@@ -80,42 +80,47 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
       }
 
       const codeToRun = userCode;
-
-      // Direct Piston API call (supports CORS natively, no Render dependency)
       const pistonLang = language === 'cpp' ? 'c++' : 'python';
       const pistonVersion = language === 'cpp' ? '10.2.0' : '3.10.0';
+      const pistonBody = { language: pistonLang, version: pistonVersion, files: [{ name: language === 'cpp' ? 'solution.cpp' : 'solution.py', content: codeToRun }], stdin: '', compile_timeout: 10000, run_timeout: 5000 };
 
-      // 12 second hard timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000);
+      // Multi-fallback execution: try each endpoint in order until one succeeds
+      let pistonData: any = null;
+      const PISTON_ENDPOINTS = [
+        'https://piston.api.lol/api/v2/execute',       // Community mirror #1
+        'https://emkc.org/api/v2/piston/execute',      // Original (may 401)
+      ];
 
-      let res: Response;
-      try {
-        res = await fetch('https://emkc.org/api/v2/piston/execute', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: controller.signal,
-          body: JSON.stringify({
-            language: pistonLang,
-            version: pistonVersion,
-            files: [{ name: language === 'cpp' ? 'solution.cpp' : 'solution.py', content: codeToRun }],
-            stdin: '',
-            compile_timeout: 10000,
-            run_timeout: 5000,
-          })
-        });
-      } finally {
-        clearTimeout(timeoutId);
+      for (const endpoint of PISTON_ENDPOINTS) {
+        try {
+          const ctrl = new AbortController();
+          const tid = setTimeout(() => ctrl.abort(), 12000);
+          const r = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal, body: JSON.stringify(pistonBody) });
+          clearTimeout(tid);
+          if (r.ok) { pistonData = await r.json(); break; }
+        } catch { /* try next */ }
       }
 
-      if (!res!.ok) throw new Error(`Compiler returned ${res!.status}`);
-      const pistonData = await res!.json();
+      // Final fallback: our Render backend
+      if (!pistonData) {
+        try {
+          const ctrl = new AbortController();
+          const tid = setTimeout(() => ctrl.abort(), 20000);
+          const r = await fetch('https://devoffs-api.onrender.com/api/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal, body: JSON.stringify({ code: codeToRun, language }) });
+          clearTimeout(tid);
+          if (r.ok) {
+            const d = await r.json();
+            pistonData = { compile: { output: '' }, run: { stdout: d.stdout || '', stderr: d.stderr || '', code: d.stderr ? 1 : 0 } };
+          }
+        } catch { /* all failed */ }
+      }
+
+      if (!pistonData) throw new Error('All execution backends unavailable. Check internet connection.');
 
       const compileErr = pistonData.compile?.output || '';
       const runOut = pistonData.run?.stdout || '';
       const runErr = pistonData.run?.stderr || '';
       const exitCode = pistonData.run?.code ?? 0;
-
       const isError = !!compileErr || !!runErr || exitCode !== 0;
 
       const terminalOutput =
@@ -125,27 +130,17 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
         (!isError && runOut ? `OUTPUT:\n${runOut}` : '') +
         (!isError && !runOut ? '(Program ran with no output)' : '');
 
-      setConsoleOutput({ stdout: terminalOutput, time: pistonData.run?.cpu_time || 0, memory: pistonData.run?.memory || 0, complexity: 'N/A' });
+      setConsoleOutput({ stdout: terminalOutput, time: 0, memory: 0, complexity: 'N/A' });
 
-      if (isError) {
-        setShowReview({
-          visible: true,
-          logs: [
-            '[SYSTEM] Compiling solution...',
-            '❌ Compilation / Runtime Error',
-            '[ERROR] Check the terminal output below and fix your code.'
-          ]
-        });
-      } else {
-        setShowReview({
-          visible: true,
-          logs: [
-            '[SYSTEM] Compiling solution...',
-            '✅ Code Compiled & Executed Successfully',
-            '[SUCCESS] Ready to Submit to AI Judge.'
-          ]
-        });
-      }
+      setShowReview({
+        visible: true,
+        logs: [
+          '[SYSTEM] Compiling solution...',
+          isError ? '❌ Compilation / Runtime Error' : '✅ Code Compiled & Executed Successfully',
+          isError ? '[ERROR] Fix the error shown in the console panel below.' : '[SUCCESS] Ready to Submit to AI Judge.'
+        ]
+      });
+
     } catch (err: any) {
       const isTimeout = err?.name === 'AbortError';
       setConsoleOutput({
