@@ -408,6 +408,8 @@ int main() { return 0; }`;
         logs: [
           `[SYSTEM] Code Graded by AI...`,
           `✅ Score: ${result.score}/100`,
+          `⏱ Time Complexity: ${result.timeComplexity || 'O(?)'}`,
+          `📦 Space Complexity: ${result.spaceComplexity || 'O(?)'}`,
           `🧠 Analysis: ${result.analysis}`,
           `[NOTE] Prepare for Next Adaptive Challenge...`
         ]

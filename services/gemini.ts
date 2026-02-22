@@ -18,9 +18,9 @@ const getAiClient = () => {
 };
 
 // MODEL CONFIGURATION
-const FAST_MODEL = 'gemini-2.0-flash';
-const PROCTOR_MODEL = 'gemini-2.0-flash-lite'; // High speed, optimized for fast metadata extraction
-const REASONING_MODEL = 'gemini-2.5-pro-preview-03-25';
+const FAST_MODEL = 'gemini-2.5-flash';
+const PROCTOR_MODEL = 'gemini-2.5-flash-lite'; // High speed, optimized for fast metadata extraction
+const REASONING_MODEL = 'gemini-2.5-pro';
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000): Promise<T> {
     try {
@@ -235,8 +235,6 @@ export const generateAdaptiveQuestion = async (
     const prompt = `Generate a single ${difficultyMarker} level coding challenge for ${domain}.
     The user scored ${lastScore}% on their previous attempt.
     
-    IMPORTANT: The solution must be written as a complete C++ program using cin/cout (stdin/stdout).
-    The starterCode must be a complete C++ main() program skeleton that reads from cin and writes to cout.
     IMPORTANT: You must generate TWO separate blocks of code to simulate a LeetCode environment:
     1. starterCode: This is what the user sees. It MUST be a pure function signature ONLY. No main(), no cin/cout, no input().
        Example C++ starterCode:
@@ -323,7 +321,7 @@ export const evaluateCodeSubmission = async (
     questionText: string,
     userCode: string,
     language: string
-): Promise<{ score: number, feedback: string, analysis: string }> => {
+): Promise<{ score: number, feedback: string, analysis: string, timeComplexity: string, spaceComplexity: string }> => {
     const ai = getAiClient();
     const prompt = `You are a strict technical judge. Evaluate the following ${language} code for ${domain}.
     Problem: ${questionText}
@@ -343,9 +341,11 @@ export const evaluateCodeSubmission = async (
                 properties: {
                     score: { type: Type.NUMBER },
                     feedback: { type: Type.STRING },
-                    analysis: { type: Type.STRING }
+                    analysis: { type: Type.STRING },
+                    timeComplexity: { type: Type.STRING, description: "e.g., O(N), O(1)" },
+                    spaceComplexity: { type: Type.STRING, description: "e.g., O(N), O(1)" }
                 },
-                required: ["score", "feedback", "analysis"]
+                required: ["score", "feedback", "analysis", "timeComplexity", "spaceComplexity"]
             }
         }
     }));
