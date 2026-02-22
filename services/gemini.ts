@@ -223,10 +223,9 @@ export const generateAdaptiveQuestion = async (
     domain: SkillDomain,
     lastScore: number,
     iteration: number
-): Promise<{ id: string, text: string, category: string, starterCode: string, constraints: string[] }> => {
+): Promise<{ id: string, text: string, category: string, starterCode: string, constraints: string[], testCases: { input: string; expectedOutput: string }[] }> => {
     const ai = getAiClient();
 
-    // Scale difficulty based on performance. Below 60 means they struggled, above 80 means they excelled.
     let difficultyMarker = "Intermediate";
     if (iteration === 1) difficultyMarker = "Intermediate";
     else if (lastScore > 85) difficultyMarker = "Expert";
@@ -234,8 +233,23 @@ export const generateAdaptiveQuestion = async (
     else if (lastScore < 50) difficultyMarker = "Beginner";
 
     const prompt = `Generate a single ${difficultyMarker} level coding challenge for ${domain}.
-    The user scored ${lastScore}% on their previous attempt. Adjust the complexity accordingly.
-    Output MUST be a JSON object containing: text (the problem statement), category (Practical/Concept), starterCode (function signature in JavaScript ONLY), constraints (array of strings).`;
+    The user scored ${lastScore}% on their previous attempt.
+    
+    IMPORTANT: The solution must be written as a complete C++ program using cin/cout (stdin/stdout).
+    The starterCode must be a complete C++ main() program skeleton that reads from cin and writes to cout.
+    Example starterCode for a sum problem:
+    #include <iostream>
+    using namespace std;
+    int main() {
+        int a, b;
+        cin >> a >> b;
+        // Your solution here
+        cout << a + b << endl;
+        return 0;
+    }
+    
+    Generate 3 real test cases where input is the exact stdin string and expectedOutput is the exact stdout string the program should print.
+    Output JSON only.`;
 
     const apiCall = withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: FAST_MODEL,
@@ -248,12 +262,20 @@ export const generateAdaptiveQuestion = async (
                     text: { type: Type.STRING },
                     category: { type: Type.STRING },
                     starterCode: { type: Type.STRING },
-                    constraints: {
+                    constraints: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    testCases: {
                         type: Type.ARRAY,
-                        items: { type: Type.STRING }
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                input: { type: Type.STRING },
+                                expectedOutput: { type: Type.STRING }
+                            },
+                            required: ["input", "expectedOutput"]
+                        }
                     }
                 },
-                required: ["text", "category", "starterCode", "constraints"]
+                required: ["text", "category", "starterCode", "constraints", "testCases"]
             }
         }
     }));
@@ -265,7 +287,8 @@ export const generateAdaptiveQuestion = async (
     const data = parseResponse(response.text);
     return {
         id: `ADAPTIVE-${Date.now()}`,
-        ...data
+        ...data,
+        testCases: data.testCases || []
     };
 };
 

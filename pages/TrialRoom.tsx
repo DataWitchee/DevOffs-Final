@@ -57,130 +57,194 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
 
   const currentQ = questions[currentQuestionIdx];
 
-  const getLanguageBoilerplate = (lang: string, fallbackJS: string) => {
+  const getLanguageBoilerplate = (lang: string, fallbackStarterCode?: string) => {
+    // If AI gave us starter code, always use it (it's proper stdin-based main())
+    if (fallbackStarterCode && fallbackStarterCode.trim() && !fallbackStarterCode.includes('solution(')) {
+      return fallbackStarterCode;
+    }
     switch (lang) {
-      case 'python': return `def solution(args):\n    # Your Python 3 code here\n    pass`;
-      case 'cpp': return `#include <iostream>\nusing namespace std;\n\nvoid solution() {\n    // Your C++ code here\n}`;
-      case 'java': return `class Solution {\n    public static void main(String[] args) {\n        // Your Java code here\n    }\n}`;
-      case 'plaintext': return `// Write your Pseudo Code or Logic Outline here...`;
-      case 'javascript':
-      default: return fallbackJS || `function solution(args) {\n  // Your JS code here\n}`;
+      case 'cpp':
+        return `#include <iostream>
+#include <vector>
+#include <string>
+using namespace std;
+
+int main() {
+    // Read from cin, write to cout
+    // Example: int n; cin >> n;
+    
+    
+    return 0;
+}`;
+      case 'python':
+        return `import sys
+
+def main():
+    # Read from input(), write with print()
+    # Example: n = int(input())
+    
+    pass
+
+main()`;
+      default:
+        return fallbackStarterCode || `#include <iostream>
+using namespace std;
+int main() { return 0; }`;
     }
   };
 
   const handleRunTests = async () => {
     setIsCompiling(true);
     setConsoleOutput(null);
+    setAiAnalysis(null);
     setShowReview({ visible: false, logs: [] });
 
     try {
-      // Only block if code is completely empty — don't block boilerplate
       const userCode = answers[`${currentQ?.id}_${language}`] || '';
       if (!userCode.trim()) {
-        setConsoleOutput({ stdout: "No code provided.\nPlease write your solution in the editor before running.", time: 0, memory: 0, complexity: "N/A" });
+        setConsoleOutput({ stdout: "No code provided.\nPlease write your solution in the editor before running.", time: 0, memory: 0 });
         setIsCompiling(false);
         return;
       }
 
       const codeToRun = userCode;
-      const pistonVersion = language === 'cpp' ? '10.2.0' : '3.10.0';
-      let pistonData: any = null;
+      const wandboxCompiler = language === 'cpp' ? 'gcc-head' : 'cpython-3.10.4';
+      const wandboxOptions = language === 'cpp' ? 'warning,c++17' : '';
 
-      // 1. PRIMARY: Wandbox (free, reliable CORS support, no auth needed)
-      try {
+      // Helper: run code with optional stdin via Wandbox
+      const runWithInput = async (stdin: string) => {
         const ctrl = new AbortController();
         const tid = setTimeout(() => ctrl.abort(), 15000);
-        const wandboxCompiler = language === 'cpp' ? 'gcc-head' : 'cpython-3.10.4';
-        const r = await fetch('https://wandbox.org/api/compile.json', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: ctrl.signal,
-          body: JSON.stringify({ code: codeToRun, compiler: wandboxCompiler, options: language === 'cpp' ? 'warning,c++17' : '' })
-        });
-        clearTimeout(tid);
-        if (r.ok) {
-          const d = await r.json();
-          // Normalize to standard format
-          pistonData = {
-            compile: { output: d.compiler_error || '' },
-            run: { stdout: d.program_output || '', stderr: d.program_error || '', code: d.status === '0' ? 0 : 1 }
-          };
-        }
-      } catch { /* fall through */ }
-
-      // 2. FALLBACK: Render backend (CORS open, may need wake-up)
-      if (!pistonData) {
         try {
-          const ctrl = new AbortController();
-          const tid = setTimeout(() => ctrl.abort(), 30000);
-          const r = await fetch('https://devoffs-api.onrender.com/api/execute', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+          const r = await fetch('https://wandbox.org/api/compile.json', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             signal: ctrl.signal,
-            body: JSON.stringify({ code: codeToRun, language })
+            body: JSON.stringify({ code: codeToRun, compiler: wandboxCompiler, options: wandboxOptions, stdin })
           });
           clearTimeout(tid);
           if (r.ok) {
             const d = await r.json();
-            pistonData = { compile: { output: '' }, run: { stdout: d.stdout || '', stderr: d.stderr || '', code: d.stderr ? 1 : 0 } };
+            return {
+              compileError: d.compiler_error || '',
+              stdout: (d.program_output || '').trim(),
+              stderr: d.program_error || '',
+              exitCode: d.status === '0' ? 0 : 1
+            };
+          }
+        } catch { clearTimeout(tid); }
+        // Fallback: Render backend
+        try {
+          const ctrl2 = new AbortController();
+          const tid2 = setTimeout(() => ctrl2.abort(), 30000);
+          const r2 = await fetch('https://devoffs-api.onrender.com/api/execute', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            signal: ctrl2.signal,
+            body: JSON.stringify({ code: codeToRun, language, stdin })
+          });
+          clearTimeout(tid2);
+          if (r2.ok) {
+            const d2 = await r2.json();
+            return { compileError: '', stdout: (d2.stdout || '').trim(), stderr: d2.stderr || '', exitCode: d2.stderr ? 1 : 0 };
           }
         } catch { /* all failed */ }
+        throw new Error('All execution backends unavailable.');
+      };
+
+      const testCases: { input: string; expectedOutput: string }[] = (currentQ as any)?.testCases || [];
+
+      if (testCases.length > 0) {
+        // Run against every test case separately
+        const results: { input: string; expected: string; actual: string; passed: boolean; error: string }[] = [];
+        let compileError = '';
+
+        for (const tc of testCases) {
+          const result = await runWithInput(tc.input);
+          if (result.compileError) { compileError = result.compileError; break; }
+          const passed = result.stdout === tc.expectedOutput.trim();
+          results.push({ input: tc.input, expected: tc.expectedOutput.trim(), actual: result.stdout, passed, error: result.stderr });
+        }
+
+        const allPassed = results.length > 0 && results.every(r => r.passed);
+        const passCount = results.filter(r => r.passed).length;
+
+        let terminalOutput = `[${language.toUpperCase()} COMPILER — DevOffs Engine]\n\n`;
+        if (compileError) {
+          terminalOutput += `COMPILATION ERROR:\n${compileError}`;
+        } else {
+          results.forEach((r, i) => {
+            terminalOutput += `── Test ${i + 1} ${r.passed ? '✅ PASSED' : '❌ FAILED'}\n`;
+            terminalOutput += `   Input:    ${r.input.slice(0, 60)}\n`;
+            terminalOutput += `   Expected: ${r.expected.slice(0, 60)}\n`;
+            if (!r.passed) terminalOutput += `   Got:      ${r.actual.slice(0, 60)}\n`;
+            if (r.error) terminalOutput += `   Error:    ${r.error.slice(0, 100)}\n`;
+            terminalOutput += '\n';
+          });
+          terminalOutput += allPassed ? `🏆 All ${results.length} tests passed!` : `${passCount}/${results.length} tests passed`;
+        }
+
+        setConsoleOutput({ stdout: terminalOutput, time: 0, memory: 0 });
+        setShowReview({
+          visible: true,
+          logs: [
+            '[SYSTEM] Running test cases...',
+            compileError ? '❌ Compilation Error' : allPassed ? `✅ ${passCount}/${testCases.length} Tests Passed!` : `⚠️ ${passCount}/${testCases.length} Tests Passed`,
+            compileError ? '[ERROR] Fix compilation error first.' : allPassed ? '[SUCCESS] All tests passed! Submit to AI Judge.' : '[HINT] Fix failing test cases and run again.'
+          ]
+        });
+
+        // AI complexity analysis on success
+        if (!compileError) {
+          setIsAnalyzing(true);
+          analyzeCodeComplexity(codeToRun, language, currentQ?.text || '').then(r => setAiAnalysis(r)).catch(() => { }).finally(() => setIsAnalyzing(false));
+        }
+
+        // ✅ Auto-submit to AI Judge if all tests pass
+        if (allPassed) {
+          setTimeout(() => handleSubmit(), 1500);
+        }
+
+      } else {
+        // No test cases — just run the code and show output
+        const result = await runWithInput('');
+        const isError = !!result.compileError || !!result.stderr || result.exitCode !== 0;
+        const terminalOutput =
+          `[${language.toUpperCase()} COMPILER — DevOffs Engine]\n\n` +
+          (result.compileError ? `COMPILATION ERROR:\n${result.compileError}\n` : '') +
+          (!result.compileError && result.stderr ? `RUNTIME ERROR:\n${result.stderr}\n` : '') +
+          (!isError && result.stdout ? `OUTPUT:\n${result.stdout}` : '') +
+          (!isError && !result.stdout ? '(Program ran with no output)' : '');
+
+        setConsoleOutput({ stdout: terminalOutput, time: 0, memory: 0 });
+        setShowReview({
+          visible: true,
+          logs: [
+            '[SYSTEM] Compiling solution...',
+            isError ? '❌ Compilation / Runtime Error' : '✅ Code Compiled & Executed Successfully',
+            isError ? '[ERROR] Fix the error shown in the console panel below.' : '[SUCCESS] Ready to Submit to AI Judge.'
+          ]
+        });
+
+        if (!isError) {
+          setIsAnalyzing(true);
+          analyzeCodeComplexity(codeToRun, language, currentQ?.text || '').then(r => setAiAnalysis(r)).catch(() => { }).finally(() => setIsAnalyzing(false));
+        }
       }
 
-      if (!pistonData) throw new Error('All execution backends unavailable. Check internet connection.');
-
-      const compileErr = pistonData.compile?.output || '';
-      const runOut = pistonData.run?.stdout || '';
-      const runErr = pistonData.run?.stderr || '';
-      const exitCode = pistonData.run?.code ?? 0;
-      const isError = !!compileErr || !!runErr || exitCode !== 0;
-
-      const terminalOutput =
-        `[${language.toUpperCase()} COMPILER v${pistonVersion} — DevOffs Engine]\n\n` +
-        (compileErr ? `COMPILATION ERROR:\n${compileErr}\n` : '') +
-        (!compileErr && runErr ? `RUNTIME ERROR:\n${runErr}\n` : '') +
-        (!isError && runOut ? `OUTPUT:\n${runOut}` : '') +
-        (!isError && !runOut ? '(Program ran with no output)' : '');
-
-      setConsoleOutput({ stdout: terminalOutput, time: 0, memory: 0, complexity: 'N/A' });
-
-      setShowReview({
-        visible: true,
-        logs: [
-          '[SYSTEM] Compiling solution...',
-          isError ? '❌ Compilation / Runtime Error' : '✅ Code Compiled & Executed Successfully',
-          isError ? '[ERROR] Fix the error shown in the console panel below.' : '[SUCCESS] Ready to Submit to AI Judge.'
-        ]
-      });
-
-      // Fire-and-forget AI complexity analysis after successful execution
-      if (!isError) {
-        setAiAnalysis(null);
-        setIsAnalyzing(true);
-        analyzeCodeComplexity(codeToRun, language, currentQ?.text || '').then(result => {
-          setAiAnalysis(result);
-        }).catch(() => { }).finally(() => setIsAnalyzing(false));
-      }
     } catch (err: any) {
       const isTimeout = err?.name === 'AbortError';
       setConsoleOutput({
         stdout: isTimeout
-          ? 'Execution Timed Out (12s limit exceeded).\nHint: Check for infinite loops or very slow algorithms.'
+          ? 'Execution Timed Out.\nHint: Check for infinite loops or very slow algorithms.'
           : `Compiler Error: ${err?.message || 'Unknown error'}`,
-        time: 0,
-        memory: 0
+        time: 0, memory: 0
       });
-      setShowReview({
-        visible: true,
-        logs: [
-          '[SYSTEM] Compiling solution...',
-          isTimeout ? '⏱️ Execution Timed Out (12s)' : '❌ Compiler Engine Unreachable',
-          isTimeout ? '[HINT] Check for infinite loops in your code.' : '[ERROR] Check your internet connection and try again.'
-        ]
-      });
+      setShowReview({ visible: true, logs: ['[SYSTEM] Compiling...', '❌ Engine Error', '[ERROR] Check your internet connection.'] });
     } finally {
       setIsCompiling(false);
     }
   };
+
 
   // Proctoring State
   const videoRef = useRef<HTMLVideoElement>(null);
