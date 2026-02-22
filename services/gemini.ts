@@ -660,7 +660,16 @@ export const generateInterviewQuestion = async (domain: SkillDomain, lastScore: 
 
 export const evaluateInterviewResponse = async (domain: SkillDomain, question: string, answer: string): Promise<{ score: number, feedback: string, spokenFeedback: string }> => {
     const ai = getAiClient();
-    const prompt = `Evaluate interview answer. Q: ${question} A: ${answer}`;
+    const prompt = `You are a strict, elite Technical Interviewer grading a candidate's spoken response.
+Question: "${question}"
+Candidate's Transcript: "${answer}"
+
+INSTRUCTIONS:
+1. If the transcript is empty, gibberish, clearly fails to capture a real answer, or just says "hello" or "I don't know", the score MUST be 0.
+2. If the answer is extremely brief or lacks technical depth, give a low score (10-40).
+3. Grade strictly out of 100 based on technical accuracy, clarity, and depth.
+4. Provide constructive 'feedback' explaining what was missed.
+5. Provide a conversational, 1-sentence 'spokenFeedback' that you (the interviewer) will say out loud to the candidate right now in response. Keep it brief.`;
 
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: FAST_MODEL,

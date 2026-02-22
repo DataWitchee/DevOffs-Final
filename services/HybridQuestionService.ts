@@ -6,7 +6,8 @@ export class HybridQuestionService {
     private model: string;
 
     constructor() {
-        const apiKey = process.env.VITE_GEMINI_API_KEY || '';
+        // @ts-ignore: Vite injects this at runtime
+        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
         console.log("Gemini Key Loaded:", !!apiKey);
         this.ai = new GoogleGenAI({ apiKey: apiKey || 'MISSING_KEY' });
         this.model = 'gemini-1.5-flash';
