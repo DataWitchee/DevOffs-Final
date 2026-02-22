@@ -363,7 +363,7 @@ export default function App() {
             } />
 
             <Route path="/exam" element={
-              !user.isAuthenticated ? <Navigate to="/login" replace /> : <ExamRoom user={user} />
+              !user.isAuthenticated ? <Navigate to="/login" replace /> : <ExamRoom user={user} onUpdateUser={handleProfileUpdate} />
             } />
 
             <Route path="/skill-dna" element={

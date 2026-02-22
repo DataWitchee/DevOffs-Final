@@ -75,10 +75,6 @@ export const ExamRoom: React.FC<Props> = ({ user, onUpdateUser }) => {
    useEffect(() => {
       // Demo Bypass: Always grant Exam Access
       if (true) {
-         if (!user?.biometrics?.descriptor) {
-            navigate('/biometric-setup', { replace: true });
-            return;
-         }
          setStatus('setup');
          return;
       }
