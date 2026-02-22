@@ -522,6 +522,22 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
                   <button onClick={handleJoinSession} disabled={joinInput.length < 6 || !isReady} className="bg-green-600 hover:bg-green-500 disabled:bg-slate-700 disabled:text-slate-500 text-white px-6 rounded-lg font-bold transition-colors">Join</button>
                 </div>
               </div>
+
+              {/* Force Cache Busting Button for Safari Users */}
+              <button
+                onClick={() => {
+                  if ('caches' in window) {
+                    caches.keys().then((names) => {
+                      names.forEach(name => caches.delete(name));
+                    });
+                  }
+                  window.location.href = window.location.href + '?reload=' + new Date().getTime();
+                }}
+                className="w-full text-xs text-slate-400 hover:text-white flex items-center justify-center gap-1 py-1"
+              >
+                <RotateCw size={12} /> Force Reload App (Fix Missing Code/Questions)
+              </button>
+
               <div className="relative"><div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-700"></div></div><div className="relative flex justify-center text-sm"><span className="px-2 bg-slate-800 text-slate-500">or</span></div></div>
               <div className="space-y-2">
                 <label className="text-sm text-slate-400 block">Host a Challenge</label>

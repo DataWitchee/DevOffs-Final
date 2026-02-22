@@ -362,6 +362,10 @@ export default function App() {
               !user.isAuthenticated ? <Navigate to="/login" replace /> : <ProfileView user={user} />
             } />
 
+            <Route path="/exam" element={
+              !user.isAuthenticated ? <Navigate to="/login" replace /> : <ExamRoom user={user} />
+            } />
+
             <Route path="/skill-dna" element={
               !user.isAuthenticated ? <Navigate to="/login" replace /> : <SkillDashboard />
             } />
