@@ -258,16 +258,17 @@ export const BiometricSetup: React.FC<BiometricSetupProps> = ({ user, onSave }) 
                                             Capture Identity
                                         </button>
                                     )}
-                                    {/* DEMO BYPASS BUTTON */}
-                                    <button
-                                        onClick={bypassForDemo}
-                                        className="w-full mt-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-bold rounded-xl border border-dashed border-slate-600 transition-all"
-                                    >
-                                        [DEMO] Override & Instant Certify
-                                    </button>
                                 </div>
                             </>
                         )}
+
+                        {/* DEMO BYPASS BUTTON (Always Visible) */}
+                        <button
+                            onClick={bypassForDemo}
+                            className="w-full mt-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-400 text-sm font-bold rounded-xl border border-dashed border-slate-600 transition-all hover:text-white hover:border-cyan-500"
+                        >
+                            [DEMO] Override Model Error & Instant Certify
+                        </button>
                     </div>
                 </div>
             </div>
