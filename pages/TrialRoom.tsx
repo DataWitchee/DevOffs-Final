@@ -109,7 +109,9 @@ int main() { return 0; }`;
         return;
       }
 
-      const codeToRun = userCode;
+      // Append the hidden driver block that parses input and calls the user's function
+      const driverBlock = (currentQ as any)?.driverCode || '';
+      const codeToRun = userCode + (driverBlock ? `\n\n${driverBlock}` : '');
       const wandboxCompiler = language === 'cpp' ? 'gcc-head' : 'cpython-3.10.4';
       const wandboxOptions = language === 'cpp' ? 'warning,c++17' : '';
 

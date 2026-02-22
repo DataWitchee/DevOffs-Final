@@ -223,7 +223,7 @@ export const generateAdaptiveQuestion = async (
     domain: SkillDomain,
     lastScore: number,
     iteration: number
-): Promise<{ id: string, text: string, category: string, starterCode: string, constraints: string[], testCases: { input: string; expectedOutput: string }[] }> => {
+): Promise<{ id: string, text: string, category: string, starterCode: string, driverCode: string, constraints: string[], testCases: { input: string; expectedOutput: string }[] }> => {
     const ai = getAiClient();
 
     let difficultyMarker = "Intermediate";
@@ -237,18 +237,43 @@ export const generateAdaptiveQuestion = async (
     
     IMPORTANT: The solution must be written as a complete C++ program using cin/cout (stdin/stdout).
     The starterCode must be a complete C++ main() program skeleton that reads from cin and writes to cout.
-    Example starterCode for a sum problem:
-    #include <iostream>
-    using namespace std;
-    int main() {
-        int a, b;
-        cin >> a >> b;
-        // Your solution here
-        cout << a + b << endl;
-        return 0;
-    }
+    IMPORTANT: You must generate TWO separate blocks of code to simulate a LeetCode environment:
+    1. starterCode: This is what the user sees. It MUST be a pure function signature ONLY. No main(), no cin/cout, no input().
+       Example C++ starterCode:
+       #include <iostream>
+       #include <vector>
+       using namespace std;
+       int sumTwo(int a, int b) {
+           // Your solution here
+           return 0;
+       }
+       Example Python starterCode:
+       def sum_two(a: int, b: int) -> int:
+           # Your solution here
+           pass
+           
+    2. driverCode: This is HIDDEN from the user. It MUST be a complete main() program that:
+       - Parses stdin according to the exact test case format.
+       - Calls the user's function from the starterCode.
+       - Prints the return value to stdout in the exact expectedOutput format.
+       Example C++ driverCode:
+       int main() {
+           int a, b;
+           if (cin >> a >> b) {
+               cout << sumTwo(a, b) << endl;
+           }
+           return 0;
+       }
+       Example Python driverCode:
+       import sys
+       if __name__ == "__main__":
+           input_data = sys.stdin.read().split()
+           if len(input_data) >= 2:
+               print(sum_two(int(input_data[0]), int(input_data[1])))
     
-    Generate 3 real test cases where input is the exact stdin string and expectedOutput is the exact stdout string the program should print.
+    CRITICAL: The driver code MUST match the language of the starterCode (assume we might run this as C++ OR Python, so provide driverCode that matches the starterCode's language). Usually, just provide C++ for both if C++ is generated. Actually, to be safe, generate C++ for both starter and driver.
+
+    Generate 3 real test cases where input is the exact stdin string and expectedOutput is the exact stdout string the driver program will print.
     Output JSON only.`;
 
     const apiCall = withRetry<GenerateContentResponse>(() => ai.models.generateContent({
@@ -262,6 +287,7 @@ export const generateAdaptiveQuestion = async (
                     text: { type: Type.STRING },
                     category: { type: Type.STRING },
                     starterCode: { type: Type.STRING },
+                    driverCode: { type: Type.STRING },
                     constraints: { type: Type.ARRAY, items: { type: Type.STRING } },
                     testCases: {
                         type: Type.ARRAY,
@@ -275,7 +301,7 @@ export const generateAdaptiveQuestion = async (
                         }
                     }
                 },
-                required: ["text", "category", "starterCode", "constraints", "testCases"]
+                required: ["text", "category", "starterCode", "driverCode", "constraints", "testCases"]
             }
         }
     }));
