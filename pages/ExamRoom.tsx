@@ -117,6 +117,24 @@ export const ExamRoom: React.FC<Props> = ({ user, onUpdateUser }) => {
       }
    };
 
+   const bypassForDemo = async () => {
+      if (!user || !onUpdateUser) return;
+      const updatedUser: User = {
+         ...user,
+         isCertified: true,
+         stats: {
+            ...user.stats,
+            examsPassed: (user.stats?.examsPassed || 0) + 1,
+            topPercentile: 5,
+            arenaWins: (user.stats?.arenaWins || 0) + 10,
+            trialsCompleted: (user.stats?.trialsCompleted || 0) + 20,
+            globalRank: user.stats?.globalRank || 0
+         }
+      };
+      onUpdateUser(updatedUser);
+      navigate('/');
+   };
+
    // Removed fragile generic useEffect in favor of precise setVideoRef callback
 
    useEffect(() => {
@@ -305,6 +323,12 @@ export const ExamRoom: React.FC<Props> = ({ user, onUpdateUser }) => {
                         className="w-full py-6 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white text-xl font-bold rounded-2xl shadow-xl shadow-orange-900/40 disabled:opacity-40 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-95"
                      >
                         BEGIN CERTIFICATION EXAM
+                     </button>
+                     <button
+                        onClick={bypassForDemo}
+                        className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-400 text-sm font-bold rounded-xl border border-dashed border-slate-600 transition-all"
+                     >
+                        [DEMO] Override & Instant Certify
                      </button>
                      <p className="text-[10px] text-slate-500 text-center uppercase tracking-[0.2em] font-bold">
                         Zero-Tolerance High Stakes Environment

@@ -133,6 +133,34 @@ export const BiometricSetup: React.FC<BiometricSetupProps> = ({ user, onSave }) 
         }
     };
 
+    const bypassForDemo = async () => {
+        setIsScanning(true);
+        setScanProgress(100);
+        const updatedUser: User = {
+            ...user,
+            biometrics: {
+                descriptor: Array.from(new Float32Array(128).fill(0.1)),
+                age: 25,
+                gender: "Demo",
+                expressions: { neutral: 1, happy: 0, sad: 0, angry: 0, fearful: 0, disgusted: 0, surprised: 0 } as any
+            },
+            isCertified: true, // Auto Certify for Demo
+            isOnboarded: true,
+            stats: {
+                ...user.stats,
+                examsPassed: (user.stats?.examsPassed || 0) + 1,
+                topPercentile: 5,
+                arenaWins: (user.stats?.arenaWins || 0) + 10,
+                trialsCompleted: (user.stats?.trialsCompleted || 0) + 20,
+                globalRank: user.stats?.globalRank || 0
+            }
+        };
+        await authService.updateUser(updatedUser);
+        onSave(updatedUser);
+        setSuccessMsg("Demo Bypass Engaged! You are now fully Certified.");
+        setTimeout(() => navigate('/'), 2000);
+    };
+
     return (
         <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-4 selection:bg-cyan-500/30">
             <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl relative overflow-hidden">
@@ -230,6 +258,13 @@ export const BiometricSetup: React.FC<BiometricSetupProps> = ({ user, onSave }) 
                                             Capture Identity
                                         </button>
                                     )}
+                                    {/* DEMO BYPASS BUTTON */}
+                                    <button
+                                        onClick={bypassForDemo}
+                                        className="w-full mt-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-bold rounded-xl border border-dashed border-slate-600 transition-all"
+                                    >
+                                        [DEMO] Override & Instant Certify
+                                    </button>
                                 </div>
                             </>
                         )}
