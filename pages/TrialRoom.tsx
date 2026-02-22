@@ -71,11 +71,10 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
     setShowReview({ visible: false, logs: [] });
 
     try {
-      const userCode = answers[`${currentQ?.id}_${language}`] || "";
-      const boilerplate = getLanguageBoilerplate(language, currentQ?.starterCode || "");
-
-      if (!userCode.trim() || userCode.trim() === boilerplate.trim()) {
-        setConsoleOutput({ stdout: "Compilation Error: No code provided.\nPlease write your solution before running tests.", time: 0, memory: 0, complexity: "N/A" });
+      // Only block if code is completely empty — don't block boilerplate
+      const userCode = answers[`${currentQ?.id}_${language}`] || '';
+      if (!userCode.trim()) {
+        setConsoleOutput({ stdout: "No code provided.\nPlease write your solution in the editor before running.", time: 0, memory: 0, complexity: "N/A" });
         setIsCompiling(false);
         return;
       }
@@ -318,10 +317,9 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
 
     try {
       const userCode = answers[`${currentQ?.id}_${language}`] || "";
-      const boilerplate = getLanguageBoilerplate(language, currentQ?.starterCode || "");
 
-      if (!userCode.trim() || userCode.trim() === boilerplate.trim()) {
-        setAdaptiveFeedback("AI Evaluation Failed: No code provided.\nPlease write your solution before submitting.");
+      if (!userCode.trim()) {
+        setAdaptiveFeedback("No code provided. Please write your solution in the editor before submitting.");
         setIsEvaluating(false);
         return;
       }
@@ -340,8 +338,9 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
         ]
       });
 
-    } catch (err) {
-      setAdaptiveFeedback("AI Evaluation Failed. Please try again or check network.");
+    } catch (err: any) {
+      const msg = err?.message || 'Unknown error';
+      setAdaptiveFeedback(`AI Evaluation Failed: ${msg.includes('VITE_GEMINI_API_KEY') ? 'API key missing in Vercel environment variables.' : msg}`);
     } finally {
       setIsEvaluating(false);
     }
