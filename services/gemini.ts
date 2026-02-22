@@ -168,7 +168,7 @@ export const generateSkillTrial = async (domain: SkillDomain): Promise<{ questio
         }
     }));
 
-    const timeout = new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 15000));
+    const timeout = new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 30000));
 
     const response = await Promise.race([apiCall, timeout]);
     if (!response) {
@@ -280,7 +280,7 @@ export const generateAdaptiveQuestion = async (
         }
     }));
 
-    const timeout = new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 15000));
+    const timeout = new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 30000));
     const response = await Promise.race([apiCall, timeout]);
     if (!response) throw new Error("API Timeout");
 
@@ -324,7 +324,7 @@ export const evaluateCodeSubmission = async (
         }
     }));
 
-    const timeout = new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 10000));
+    const timeout = new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 25000));
     const response = await Promise.race([apiCall, timeout]);
     if (!response) throw new Error("API Timeout");
 
@@ -361,7 +361,7 @@ Give time complexity (Big O), space complexity (Big O), a one-line code quality 
             }
         }
     }));
-    const timeout = new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 8000));
+    const timeout = new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 20000));
     const response = await Promise.race([apiCall, timeout]);
     if (!response) throw new Error("API Timeout");
     return parseResponse(response.text);
@@ -404,7 +404,7 @@ export const simulateExecution = async (
         }
     }));
 
-    const timeout = new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 10000));
+    const timeout = new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 25000));
     const response = await Promise.race([apiCall, timeout]);
     if (!response) throw new Error("API Timeout");
 

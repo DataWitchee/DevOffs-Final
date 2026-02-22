@@ -54,6 +54,8 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
   const [terminalExpanded, setTerminalExpanded] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<{ timeComplexity: string; spaceComplexity: string; review: string; suggestion: string } | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [customInput, setCustomInput] = useState(''); // User-provided stdin for custom test runs
+  const [showCustomInput, setShowCustomInput] = useState(false);
 
   const currentQ = questions[currentQuestionIdx];
 
@@ -206,7 +208,7 @@ int main() { return 0; }`;
 
       } else {
         // No test cases — just run the code and show output
-        const result = await runWithInput('');
+        const result = await runWithInput(customInput);
         const isError = !!result.compileError || !!result.stderr || result.exitCode !== 0;
         const terminalOutput =
           `[${language.toUpperCase()} COMPILER — DevOffs Engine]\n\n` +
@@ -776,70 +778,81 @@ int main() { return 0; }`;
             </div>
           )}
 
-          {/* UPGRADED TERMINAL PANEL */}
-          <div className={`absolute bottom-20 left-4 right-4 z-10 transition-all duration-300 ${terminalExpanded ? 'h-72' : 'h-40'}`}>
-            {consoleOutput && (
-              <div className="h-full bg-slate-950 border border-slate-700 rounded-xl shadow-2xl font-mono text-xs flex flex-col">
-                {/* Terminal Header */}
-                <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800 bg-slate-900 rounded-t-xl shrink-0">
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <Terminal size={12} />
-                    <span className="font-bold text-slate-300">Console Output</span>
-                    {isAnalyzing && <span className="text-cyan-400 animate-pulse text-[10px]">⚡ AI analyzing...</span>}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {/* AI Complexity Badges */}
-                    {aiAnalysis && (
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 bg-cyan-900/30 text-cyan-300 rounded text-[10px] font-bold border border-cyan-500/20">⏱ {aiAnalysis.timeComplexity}</span>
-                        <span className="px-2 py-0.5 bg-purple-900/30 text-purple-300 rounded text-[10px] font-bold border border-purple-500/20">🧠 {aiAnalysis.spaceComplexity}</span>
-                      </div>
-                    )}
-                    <button onClick={() => setTerminalExpanded(e => !e)} className="text-slate-500 hover:text-white transition-colors">
-                      {terminalExpanded ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
-                    </button>
-                    <button onClick={() => { setConsoleOutput(null); setAiAnalysis(null); }} className="text-slate-500 hover:text-red-400 transition-colors">
-                      <XCircle size={12} />
-                    </button>
-                  </div>
+          {/* TERMINAL + CUSTOM INPUT PANEL */}
+          <div className={`absolute bottom-20 left-4 right-4 z-10 transition-all duration-300 ${terminalExpanded ? 'h-80' : 'h-44'}`}>
+            <div className="h-full bg-slate-950 border border-slate-700 rounded-xl shadow-2xl font-mono text-xs flex flex-col">
+              {/* Terminal Header */}
+              <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800 bg-slate-900 rounded-t-xl shrink-0">
+                <div className="flex items-center gap-3">
+                  {/* Tab: Output / Custom Input */}
+                  <button
+                    onClick={() => setShowCustomInput(false)}
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded transition-colors ${!showCustomInput ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                  >
+                    <Terminal size={10} className="inline mr-1" />Output
+                  </button>
+                  <button
+                    onClick={() => setShowCustomInput(true)}
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded transition-colors ${showCustomInput ? 'bg-indigo-700 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                  >
+                    ⌨️ Custom Input
+                  </button>
+                  {isAnalyzing && <span className="text-cyan-400 animate-pulse text-[10px]">⚡ AI analyzing...</span>}
                 </div>
-
-                {/* Terminal Body */}
-                <div className="flex-1 overflow-y-auto">
-                  {/* Test Case Expected vs Actual */}
-                  {currentQ?.testCases && currentQ.testCases.length > 0 && !consoleOutput.stdout.includes('ERROR') && (
-                    <div className="px-3 py-2 border-b border-slate-800 grid grid-cols-2 gap-3">
-                      {currentQ.testCases.slice(0, 2).map((tc: any, i: number) => {
-                        const actualOut = consoleOutput.stdout.replace(/\[.*\]\n\n.*?\n/s, '').replace('OUTPUT:\n', '').trim();
-                        const passed = actualOut.trim() === String(tc.expectedOutput).trim();
-                        return (
-                          <div key={i} className={`p-2 rounded border text-[10px] ${passed ? 'border-green-500/30 bg-green-900/10' : 'border-slate-700 bg-slate-900/50'}`}>
-                            <div className="flex items-center gap-1 mb-1">
-                              {passed ? <CheckCircle size={10} className="text-green-400" /> : <div className="w-2 h-2 rounded-full bg-slate-600" />}
-                              <span className="font-bold text-slate-400">Test {i + 1}</span>
-                            </div>
-                            <div><span className="text-slate-500">Input: </span><span className="text-slate-300">{String(tc.input).slice(0, 30)}</span></div>
-                            <div><span className="text-slate-500">Expected: </span><span className="text-green-400">{String(tc.expectedOutput).slice(0, 30)}</span></div>
-                          </div>
-                        );
-                      })}
+                <div className="flex items-center gap-3">
+                  {aiAnalysis && !showCustomInput && (
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 bg-cyan-900/30 text-cyan-300 rounded text-[10px] font-bold border border-cyan-500/20">⏱ {aiAnalysis.timeComplexity}</span>
+                      <span className="px-2 py-0.5 bg-purple-900/30 text-purple-300 rounded text-[10px] font-bold border border-purple-500/20">🧠 {aiAnalysis.spaceComplexity}</span>
                     </div>
                   )}
-
-                  {/* Raw stdout */}
-                  <pre className="p-3 text-slate-300 whitespace-pre-wrap leading-relaxed">{consoleOutput.stdout}</pre>
-
-                  {/* AI Review */}
-                  {aiAnalysis && (
-                    <div className="mx-3 mb-3 p-2 bg-indigo-900/20 border border-indigo-500/20 rounded text-[10px]">
-                      <div className="text-indigo-300 font-bold mb-1">🤖 AI Review</div>
-                      <div className="text-slate-300">{aiAnalysis.review}</div>
-                      <div className="text-amber-300 mt-1">💡 {aiAnalysis.suggestion}</div>
-                    </div>
-                  )}
+                  <button onClick={() => setTerminalExpanded(e => !e)} className="text-slate-500 hover:text-white transition-colors">
+                    {terminalExpanded ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+                  </button>
+                  <button onClick={() => { setConsoleOutput(null); setAiAnalysis(null); }} className="text-slate-500 hover:text-red-400 transition-colors">
+                    <XCircle size={12} />
+                  </button>
                 </div>
               </div>
-            )}
+
+              {/* Body */}
+              <div className="flex-1 overflow-hidden">
+                {showCustomInput ? (
+                  // ── CUSTOM INPUT TAB ────────────────────────────────────
+                  <div className="h-full flex flex-col p-2 gap-2">
+                    <p className="text-slate-400 text-[10px]">Type your custom stdin input here. When you click <span className="text-white font-bold">Run Code</span>, this will be passed as input to your program.</p>
+                    <textarea
+                      value={customInput}
+                      onChange={e => setCustomInput(e.target.value)}
+                      placeholder={`Example for Two Sum:\n4 9\n2 7 11 15`}
+                      className="flex-1 w-full bg-slate-900 text-slate-200 border border-slate-700 rounded p-2 text-xs font-mono resize-none outline-none focus:border-indigo-500 placeholder:text-slate-600"
+                      spellCheck={false}
+                    />
+                    <p className="text-[10px] text-slate-600">Note: Custom input is used when there are no built-in test cases for the current question, or when you want to test a specific scenario.</p>
+                  </div>
+                ) : (
+                  // ── OUTPUT TAB ──────────────────────────────────────────
+                  <div className="h-full overflow-y-auto">
+                    {consoleOutput ? (
+                      <>
+                        <pre className="p-3 text-slate-300 whitespace-pre-wrap leading-relaxed">{consoleOutput.stdout}</pre>
+                        {aiAnalysis && (
+                          <div className="mx-3 mb-3 p-2 bg-indigo-900/20 border border-indigo-500/20 rounded text-[10px]">
+                            <div className="text-indigo-300 font-bold mb-1">🤖 AI Review</div>
+                            <div className="text-slate-300">{aiAnalysis.review}</div>
+                            <div className="text-amber-300 mt-1">💡 {aiAnalysis.suggestion}</div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-slate-600 text-[11px]">
+                        Click <span className="mx-1 text-white font-bold">Run Code</span> to see output here
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="absolute bottom-6 right-6 z-10 flex gap-4">
