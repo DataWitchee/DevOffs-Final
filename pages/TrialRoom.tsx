@@ -80,46 +80,47 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
       }
 
       const codeToRun = userCode;
-      const pistonLang = language === 'cpp' ? 'c++' : 'python';
       const pistonVersion = language === 'cpp' ? '10.2.0' : '3.10.0';
-      const pistonBody = { language: pistonLang, version: pistonVersion, files: [{ name: language === 'cpp' ? 'solution.cpp' : 'solution.py', content: codeToRun }], stdin: '', compile_timeout: 10000, run_timeout: 5000 };
-
-      // Multi-fallback execution — Render first (CORS guaranteed), then Piston mirrors
       let pistonData: any = null;
 
-      // 1. Try our own Render backend first (CORS open, always reliable once warm)
+      // 1. PRIMARY: Wandbox (free, reliable CORS support, no auth needed)
       try {
         const ctrl = new AbortController();
-        const tid = setTimeout(() => ctrl.abort(), 25000); // 25s to allow cold start wake-up
-        const r = await fetch('https://devoffs-api.onrender.com/api/execute', {
+        const tid = setTimeout(() => ctrl.abort(), 15000);
+        const wandboxCompiler = language === 'cpp' ? 'gcc-head' : 'cpython-3.10.4';
+        const r = await fetch('https://wandbox.org/api/compile.json', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           signal: ctrl.signal,
-          body: JSON.stringify({ code: codeToRun, language })
+          body: JSON.stringify({ code: codeToRun, compiler: wandboxCompiler, options: language === 'cpp' ? 'warning,c++17' : '' })
         });
         clearTimeout(tid);
         if (r.ok) {
           const d = await r.json();
-          pistonData = { compile: { output: '' }, run: { stdout: d.stdout || '', stderr: d.stderr || '', code: d.stderr ? 1 : 0 } };
+          // Normalize to standard format
+          pistonData = {
+            compile: { output: d.compiler_error || '' },
+            run: { stdout: d.program_output || '', stderr: d.program_error || '', code: d.status === '0' ? 0 : 1 }
+          };
         }
-      } catch { /* backend asleep, try Piston mirrors */ }
+      } catch { /* fall through */ }
 
-      // 2. Fallback to Piston community mirrors
+      // 2. FALLBACK: Render backend (CORS open, may need wake-up)
       if (!pistonData) {
-        for (const endpoint of ['https://piston.api.lol/api/v2/execute', 'https://emkc.org/api/v2/piston/execute']) {
-          try {
-            const ctrl = new AbortController();
-            const tid = setTimeout(() => ctrl.abort(), 10000);
-            const r = await fetch(endpoint, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              signal: ctrl.signal,
-              body: JSON.stringify(pistonBody)
-            });
-            clearTimeout(tid);
-            if (r.ok) { pistonData = await r.json(); break; }
-          } catch { continue; }
-        }
+        try {
+          const ctrl = new AbortController();
+          const tid = setTimeout(() => ctrl.abort(), 30000);
+          const r = await fetch('https://devoffs-api.onrender.com/api/execute', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            signal: ctrl.signal,
+            body: JSON.stringify({ code: codeToRun, language })
+          });
+          clearTimeout(tid);
+          if (r.ok) {
+            const d = await r.json();
+            pistonData = { compile: { output: '' }, run: { stdout: d.stdout || '', stderr: d.stderr || '', code: d.stderr ? 1 : 0 } };
+          }
+        } catch { /* all failed */ }
       }
 
       if (!pistonData) throw new Error('All execution backends unavailable. Check internet connection.');
@@ -620,11 +621,13 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
           </div>
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             <div className="prose prose-invert max-w-none select-none cursor-default" onCopy={preventCopy} onContextMenu={(e) => e.preventDefault()}>
-              <p className="text-lg text-slate-200 leading-relaxed">{currentQ?.text}</p>
-            </div>
-
-            <div className="p-4 bg-slate-900/50 rounded-xl border border-slate-700 border-dashed">
-              <p className="text-xs text-slate-500">Provide architectural reasoning and implementation details. Avoid shallow summaries.</p>
+              <p className="text-lg text-slate-200 leading-relaxed whitespace-pre-wrap">
+                {currentQ?.text
+                  ?.replace(/^#{1,3}\s*/gm, '')      // remove ### headings
+                  ?.replace(/\*\*(.*?)\*\*/g, '$1')  // remove **bold**
+                  ?.replace(/\*(.*?)\*/g, '$1')       // remove *italic*
+                  ?.trim()}
+              </p>
             </div>
           </div>
           {/* PIP PROCTOR */}
