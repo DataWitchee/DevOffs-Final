@@ -5,6 +5,7 @@ import { generateChallengeScenario, validateChallengeStep, analyzeEnvironmentSna
 import { challengeService, ChallengeSession } from '../services/challenge';
 import { hybridQuestionService } from '../services/HybridQuestionService';
 import { API_BASE_URL } from '../config';
+import Editor from "@monaco-editor/react";
 import { Zap, Users, Code, CheckCircle, Clock, Play, Loader2, Trophy, AlertTriangle, Share2, Copy, Lock, Eye, EyeOff, Video, VideoOff, ShieldCheck, Sun, User as UserIcon, Smartphone, RotateCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -56,6 +57,7 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
   const [validating, setValidating] = useState(false);
   const [feed, setFeed] = useState<string[]>([]);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [language, setLanguage] = useState<'typescript' | 'javascript' | 'python' | 'cpp' | 'java'>('typescript');
 
   // Anti-Cheat / Monitoring State
   const [violationCount, setViolationCount] = useState(0);
@@ -360,9 +362,11 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
       const oLogic = data.originalQuestion?.content || "";
       setOriginalLogic(oLogic);
 
-      const tsSnippet = data.originalQuestion?.codeSnippets?.find((s: any) => s.langSlug === 'typescript' || s.langSlug === 'javascript');
+      const tsSnippet = data.originalQuestion?.codeSnippets?.find((s: any) => s.langSlug === language || s.langSlug === 'typescript' || s.langSlug === 'javascript');
       if (tsSnippet && tsSnippet.code) {
         setCode(tsSnippet.code);
+      } else {
+        setCode("// Write logic here\n// The AI will evaluate your approach based on the challenge description.");
       }
 
       setCheckpoints([
@@ -659,9 +663,33 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
             </div>
           </div>
         </div>
-        <div className="lg:col-span-6 bg-slate-900 rounded-xl border border-slate-700 flex flex-col overflow-hidden relative">
-          <div className="p-2 bg-[#1e293b] flex items-center justify-between border-b border-slate-700"><div className="flex gap-1.5 px-2"><div className="w-3 h-3 rounded-full bg-red-500"></div><div className="w-3 h-3 rounded-full bg-yellow-500"></div><div className="w-3 h-3 rounded-full bg-green-500"></div></div><span className="text-xs text-slate-400 font-mono">race_solution.ts</span></div>
-          <textarea value={code} onChange={(e) => setCode(e.target.value)} className="flex-1 w-full bg-[#0f172a] text-slate-200 p-4 font-mono text-sm outline-none resize-none" placeholder="// Write your solution here...&#10;// Click 'Validate' on the left to score points." spellCheck={false} />
+        <div className="lg:col-span-6 bg-slate-900 rounded-xl border border-slate-700 flex flex-col overflow-hidden relative group">
+          <div className="p-2 bg-[#1e293b] flex items-center justify-between border-b border-slate-700">
+            <div className="flex gap-1.5 px-2"><div className="w-3 h-3 rounded-full bg-red-500"></div><div className="w-3 h-3 rounded-full bg-yellow-500"></div><div className="w-3 h-3 rounded-full bg-green-500"></div></div>
+            <div className="flex items-center gap-4">
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value as any)}
+                className="bg-slate-800 text-white text-xs px-3 py-1.5 rounded-md border border-slate-600 outline-none focus:border-cyan-500 font-mono"
+              >
+                <option value="cpp">C++ (GCC)</option>
+                <option value="python">Python 3</option>
+                <option value="typescript">TypeScript</option>
+                <option value="java">Java</option>
+              </select>
+              <span className="text-xs text-slate-400 font-mono">race_solution.{language === 'python' ? 'py' : language === 'cpp' ? 'cpp' : 'ts'}</span>
+            </div>
+          </div>
+          <div className="flex-1 w-full bg-[#0f172a] relative">
+            <Editor
+              height="100%"
+              language={language}
+              theme="vs-dark"
+              value={code}
+              onChange={(val) => setCode(val || '')}
+              options={{ minimap: { enabled: false }, fontSize: 14, wordWrap: 'on', padding: { top: 16 } }}
+            />
+          </div>
           {lastViolationMsg && (
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-600/90 text-white px-6 py-4 rounded-xl shadow-2xl z-20 animate-bounce font-bold border-2 border-red-400 flex flex-col items-center gap-2"><AlertTriangle size={32} /><span>{lastViolationMsg}</span></div>
           )}
