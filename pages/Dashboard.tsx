@@ -2,7 +2,7 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, SkillDomain, SkillDNAScore } from '../types';
-import { Play, TrendingUp, ShieldCheck, Lock, AlertCircle, Zap, Users, XCircle, Mic, Video, Award, Clock, FileText, ShieldAlert, CheckCircle, Brain, Swords } from 'lucide-react';
+import { Play, TrendingUp, ShieldCheck, Lock, AlertCircle, Zap, Users, XCircle, Mic, Video, Award, Clock, FileText, ShieldAlert, CheckCircle, Brain, Swords, RotateCw } from 'lucide-react';
 import { SkillRadar } from '../components/SkillRadar';
 import { GameModeSelector } from '../components/GameModeSelector';
 import { CyberLoader } from '../components/CyberLoader';
@@ -158,6 +158,22 @@ export const Dashboard: React.FC<Props> = ({ user, onStartTrial }) => {
     return <CyberLoader text="Calibrating Secure Environment..." />;
   }
 
+  const nuclearCacheClear = () => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (registrations) {
+        for (let registration of registrations) {
+          registration.unregister();
+        }
+      });
+    }
+    if ('caches' in window) {
+      caches.keys().then((names) => {
+        names.forEach(name => caches.delete(name));
+      });
+    }
+    window.location.replace(window.location.origin + window.location.pathname + '?v=' + new Date().getTime());
+  };
+
   return (
     <div className="space-y-8 animate-fade-in">
       {/* Header */}
@@ -166,6 +182,12 @@ export const Dashboard: React.FC<Props> = ({ user, onStartTrial }) => {
           <h1 className="text-3xl font-bold text-white mb-2">Welcome back, {user.name}</h1>
           <p className="text-slate-400">Your live skill verification status is <span className="text-green-400 font-semibold">Active</span></p>
         </div>
+        <button
+          onClick={nuclearCacheClear}
+          className="bg-red-900/40 text-red-400 hover:bg-red-500 hover:text-white px-4 py-2 rounded-lg font-bold text-sm border border-red-500/30 transition-all flex items-center gap-2"
+        >
+          <RotateCw size={14} /> PULL LATEST LIVE UPDATE
+        </button>
       </div>
 
       {/* Main Grid */}
