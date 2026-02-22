@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { User, SkillDomain, ChallengeParticipant, ChallengeCheckpoint } from '../types';
 import { generateChallengeScenario, validateChallengeStep, analyzeEnvironmentSnapshot } from '../services/gemini';
 import { challengeService, ChallengeSession } from '../services/challenge';
+import { hybridQuestionService } from '../services/HybridQuestionService';
 import { API_BASE_URL } from '../config';
 import { Zap, Users, Code, CheckCircle, Clock, Play, Loader2, Trophy, AlertTriangle, Share2, Copy, Lock, Eye, EyeOff, Video, VideoOff, ShieldCheck, Sun, User as UserIcon, Smartphone, RotateCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -269,8 +270,9 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
     setIsGeneratingTask(true);
     setGeneratedTaskReady(false);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/question/random`);
-      const data = await response.json();
+      // 100% Client-Side generation for Serverless compatibility
+      const data = await hybridQuestionService.fetchAndMutateRandomProblem();
+
       const taskDesc = data.mutatedDescription || "Fallback task description";
       const oLogic = data.originalQuestion?.content || "";
       setOriginalLogic(oLogic);
@@ -350,8 +352,9 @@ export const ChallengeArena: React.FC<Props> = ({ user }) => {
 
   const startPublicRace = async (domain: SkillDomain) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/question/random`);
-      const data = await response.json();
+      // 100% Client-Side generation for Serverless compatibility
+      const data = await hybridQuestionService.fetchAndMutateRandomProblem();
+
       setTask(data.mutatedDescription || "Fallback task...");
 
       const oLogic = data.originalQuestion?.content || "";
