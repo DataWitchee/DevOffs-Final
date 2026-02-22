@@ -84,35 +84,42 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
       const pistonVersion = language === 'cpp' ? '10.2.0' : '3.10.0';
       const pistonBody = { language: pistonLang, version: pistonVersion, files: [{ name: language === 'cpp' ? 'solution.cpp' : 'solution.py', content: codeToRun }], stdin: '', compile_timeout: 10000, run_timeout: 5000 };
 
-      // Multi-fallback execution: try each endpoint in order until one succeeds
+      // Multi-fallback execution — Render first (CORS guaranteed), then Piston mirrors
       let pistonData: any = null;
-      const PISTON_ENDPOINTS = [
-        'https://piston.api.lol/api/v2/execute',       // Community mirror #1
-        'https://emkc.org/api/v2/piston/execute',      // Original (may 401)
-      ];
 
-      for (const endpoint of PISTON_ENDPOINTS) {
-        try {
-          const ctrl = new AbortController();
-          const tid = setTimeout(() => ctrl.abort(), 12000);
-          const r = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal, body: JSON.stringify(pistonBody) });
-          clearTimeout(tid);
-          if (r.ok) { pistonData = await r.json(); break; }
-        } catch { /* try next */ }
-      }
+      // 1. Try our own Render backend first (CORS open, always reliable once warm)
+      try {
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 25000); // 25s to allow cold start wake-up
+        const r = await fetch('https://devoffs-api.onrender.com/api/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: ctrl.signal,
+          body: JSON.stringify({ code: codeToRun, language })
+        });
+        clearTimeout(tid);
+        if (r.ok) {
+          const d = await r.json();
+          pistonData = { compile: { output: '' }, run: { stdout: d.stdout || '', stderr: d.stderr || '', code: d.stderr ? 1 : 0 } };
+        }
+      } catch { /* backend asleep, try Piston mirrors */ }
 
-      // Final fallback: our Render backend
+      // 2. Fallback to Piston community mirrors
       if (!pistonData) {
-        try {
-          const ctrl = new AbortController();
-          const tid = setTimeout(() => ctrl.abort(), 20000);
-          const r = await fetch('https://devoffs-api.onrender.com/api/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal, body: JSON.stringify({ code: codeToRun, language }) });
-          clearTimeout(tid);
-          if (r.ok) {
-            const d = await r.json();
-            pistonData = { compile: { output: '' }, run: { stdout: d.stdout || '', stderr: d.stderr || '', code: d.stderr ? 1 : 0 } };
-          }
-        } catch { /* all failed */ }
+        for (const endpoint of ['https://piston.api.lol/api/v2/execute', 'https://emkc.org/api/v2/piston/execute']) {
+          try {
+            const ctrl = new AbortController();
+            const tid = setTimeout(() => ctrl.abort(), 10000);
+            const r = await fetch(endpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              signal: ctrl.signal,
+              body: JSON.stringify(pistonBody)
+            });
+            clearTimeout(tid);
+            if (r.ok) { pistonData = await r.json(); break; }
+          } catch { continue; }
+        }
       }
 
       if (!pistonData) throw new Error('All execution backends unavailable. Check internet connection.');
@@ -230,6 +237,8 @@ export const TrialRoom: React.FC<Props> = ({ domain, onComplete }) => {
       }
     };
     init();
+    // Fire-and-forget: wake the Render backend immediately on mount so it's warm when user runs code
+    fetch('https://devoffs-api.onrender.com/api/test').catch(() => { });
   }, [domain]);
 
   const startCamera = async () => {
